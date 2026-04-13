@@ -28,7 +28,7 @@ export async function PUT(
   const { id } = await params
   const body = await request.json()
   const { name, description, filmStock, filmFormat, iso, pushPull, camera, lens,
-    dateShotStart, dateShotEnd, lab, dateDeveloped, developProcess, notes, coverPhotoId } = body
+    dateShotStart, dateShotEnd, lab, dateDeveloped, developProcess, notes, coverPhotoId, tags } = body
 
   const existing = await prisma.roll.findUnique({ where: { id } })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -64,6 +64,15 @@ export async function PUT(
       developProcess: developProcess ?? existing.developProcess,
       notes: notes ?? existing.notes,
       coverPhotoId: coverPhotoId !== undefined ? coverPhotoId : existing.coverPhotoId,
+      ...(tags !== undefined && {
+        tags: {
+          set: [],
+          connectOrCreate: (tags as string[]).map(name => ({
+            where: { name },
+            create: { name },
+          })),
+        },
+      }),
     },
   })
 

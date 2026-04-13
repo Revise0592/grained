@@ -12,6 +12,7 @@ export async function GET() {
         take: 1,
         select: { id: true, path: true, filename: true },
       },
+      tags: { select: { name: true } },
     },
   })
   return NextResponse.json(rolls)
@@ -20,7 +21,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const body = await request.json()
   const { name, description, filmStock, filmFormat, iso, pushPull, camera, lens,
-    dateShotStart, dateShotEnd, lab, dateDeveloped, developProcess, notes } = body
+    dateShotStart, dateShotEnd, lab, dateDeveloped, developProcess, notes, tags } = body
 
   if (!name?.trim()) {
     return NextResponse.json({ error: 'Name is required' }, { status: 400 })
@@ -35,6 +36,14 @@ export async function POST(request: NextRequest) {
       dateShotEnd: dateShotEnd ? new Date(dateShotEnd) : null,
       lab, dateDeveloped: dateDeveloped ? new Date(dateDeveloped) : null,
       developProcess, notes,
+      ...(tags?.length && {
+        tags: {
+          connectOrCreate: (tags as string[]).map((tagName: string) => ({
+            where: { name: tagName },
+            create: { name: tagName },
+          })),
+        },
+      }),
     },
   })
 

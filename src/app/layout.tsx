@@ -9,12 +9,14 @@ export const metadata: Metadata = {
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const authEnabled = !!process.env.AUTH_PASSWORD
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
           <div className="min-h-screen flex flex-col">
-            <Nav />
+            <Nav authEnabled={authEnabled} />
             <main className="flex-1">{children}</main>
           </div>
         </ThemeProvider>

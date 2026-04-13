@@ -3,15 +3,16 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, Pencil, Trash2, Camera, Star, ImageIcon, CheckSquare, X, Square } from 'lucide-react'
+import { ChevronLeft, Pencil, Trash2, Camera, Star, ImageIcon, CheckSquare, X, Square, Tag } from 'lucide-react'
 import { cn, formatDate, imageUrl } from '@/lib/utils'
 import { Lightbox } from '@/components/lightbox'
 import { Comments } from '@/components/comments'
-import type { Roll, Photo, RollComment } from '@prisma/client'
+import type { Roll, Photo, RollComment, Tag } from '@prisma/client'
 
 type RollWithRelations = Roll & {
   photos: Photo[]
   comments: RollComment[]
+  tags: Tag[]
 }
 
 export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
@@ -129,6 +130,20 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
                 </span>
               )}
             </div>
+            {roll.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {roll.tags.map(tag => (
+                  <Link
+                    key={tag.id}
+                    href={`/?tag=${encodeURIComponent(tag.name)}`}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground border border-border hover:text-foreground hover:border-foreground/30 transition-colors"
+                  >
+                    <Tag className="h-2.5 w-2.5" />
+                    {tag.name}
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2 shrink-0">

@@ -17,6 +17,7 @@ export default async function RollPage({ params }: { params: Promise<{ id: strin
     include: {
       photos: { orderBy: { order: 'asc' } },
       comments: { orderBy: { createdAt: 'asc' } },
+      tags: true,
     },
   })
 

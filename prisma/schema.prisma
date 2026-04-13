@@ -41,6 +41,7 @@ model Roll {
 
   photos   Photo[]
   comments RollComment[]
+  tags     Tag[]
 }
 
 model Photo {
@@ -67,6 +68,12 @@ model Photo {
   createdAt DateTime @default(now())
 
   comments PhotoComment[]
+}
+
+model Tag {
+  id    String @id @default(cuid())
+  name  String @unique
+  rolls Roll[]
 }
 
 model RollComment {

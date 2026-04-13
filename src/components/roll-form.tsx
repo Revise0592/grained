@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronDown, Loader2 } from 'lucide-react'
+import { ChevronDown, Loader2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { FILM_STOCKS, FILM_FORMATS, DEVELOP_PROCESSES, PUSH_PULL_VALUES } from '@/lib/film-stocks'
 import type { Roll } from '@prisma/client'
@@ -10,16 +10,43 @@ import type { Roll } from '@prisma/client'
 interface RollFormProps {
   initial?: Partial<Roll>
   rollId?: string
+  initialTags?: string[]
 }
 
 const CAMERAS_HINT = ['Nikon F3', 'Canon AE-1', 'Leica M6', 'Contax T2', 'Olympus OM-1', 'Pentax K1000', 'Mamiya RB67', 'Hasselblad 500C']
 
-export function RollForm({ initial, rollId }: RollFormProps) {
+export function RollForm({ initial, rollId, initialTags }: RollFormProps) {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [filmQuery, setFilmQuery] = useState(initial?.filmStock ?? '')
   const [showFilmDropdown, setShowFilmDropdown] = useState(false)
+
+  // Tags state
+  const [tags, setTags] = useState<string[]>(initialTags ?? [])
+  const [tagInput, setTagInput] = useState('')
+  const [allTags, setAllTags] = useState<string[]>([])
+  const [showTagSuggestions, setShowTagSuggestions] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/tags')
+      .then(r => r.json())
+      .then((data: { name: string }[]) => setAllTags(data.map(t => t.name)))
+      .catch(() => {})
+  }, [])
+
+  const tagSuggestions = tagInput
+    ? allTags.filter(t => t.toLowerCase().includes(tagInput.toLowerCase()) && !tags.includes(t)).slice(0, 6)
+    : allTags.filter(t => !tags.includes(t)).slice(0, 6)
+
+  const addTag = (name: string) => {
+    const trimmed = name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+    if (!trimmed || tags.includes(trimmed)) return
+    setTags(prev => [...prev, trimmed])
+    setTagInput('')
+  }
+
+  const removeTag = (name: string) => setTags(prev => prev.filter(t => t !== name))
 
   const [form, setForm] = useState({
     name: initial?.name ?? '',
@@ -73,6 +100,7 @@ export function RollForm({ initial, rollId }: RollFormProps) {
       dateDeveloped: form.dateDeveloped || null,
       developProcess: form.developProcess || null,
       notes: form.notes || null,
+      tags,
     }
 
     const url = rollId ? `/api/rolls/${rollId}` : '/api/rolls'
@@ -113,6 +141,52 @@ export function RollForm({ initial, rollId }: RollFormProps) {
             rows={2}
             className={cn(inputClass, 'resize-none')}
           />
+        </Field>
+        <Field label="Tags">
+          <div className="space-y-2">
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {tags.map(tag => (
+                  <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-accent/10 text-accent border border-accent/20">
+                    {tag}
+                    <button type="button" onClick={() => removeTag(tag)} className="hover:text-destructive transition-colors ml-0.5">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="relative">
+              <input
+                type="text"
+                value={tagInput}
+                onChange={e => { setTagInput(e.target.value); setShowTagSuggestions(true) }}
+                onFocus={() => setShowTagSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowTagSuggestions(false), 150)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); addTag(tagInput) }
+                  if (e.key === ',') { e.preventDefault(); addTag(tagInput) }
+                }}
+                placeholder="Type a tag and press Enter…"
+                className={inputClass}
+              />
+              {showTagSuggestions && tagSuggestions.length > 0 && (
+                <div className="absolute z-10 top-full mt-1 w-full bg-card border border-border rounded-md shadow-lg max-h-40 overflow-y-auto">
+                  {tagSuggestions.map(t => (
+                    <button
+                      key={t}
+                      type="button"
+                      onMouseDown={() => { addTag(t); setShowTagSuggestions(false) }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">Press Enter or comma to add. Tags are shared across rolls.</p>
+          </div>
         </Field>
       </Section>
 
