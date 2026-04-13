@@ -1,0 +1,86 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Roll {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String?
+
+  // Film
+  filmStock    String?
+  filmFormat   String? // 35mm, 120, 4x5, LF
+  iso          Int?
+  pushPull     String? // "0", "+1", "-2", etc.
+
+  // Camera
+  camera String?
+  lens   String?
+
+  // Dates
+  dateShotStart DateTime?
+  dateShotEnd   DateTime?
+
+  // Lab / Development
+  lab            String?
+  dateDeveloped  DateTime?
+  developProcess String? // C-41, E-6, B&W, Cross-process
+
+  // Meta
+  coverPhotoId String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  photos   Photo[]
+  comments RollComment[]
+}
+
+model Photo {
+  id           String @id @default(cuid())
+  rollId       String
+  roll         Roll   @relation(fields: [rollId], references: [id], onDelete: Cascade)
+  filename     String
+  originalName String
+  path         String
+  width        Int?
+  height       Int?
+  frameNumber  Int?
+  order        Int    @default(0)
+
+  rotation     Int      @default(0) // 0, 90, 180, 270
+
+  // Per-frame overrides
+  shutterSpeed String?
+  aperture     String?
+  exposureComp String?
+  focalLength  String?
+  notes        String?
+
+  createdAt DateTime @default(now())
+
+  comments PhotoComment[]
+}
+
+model RollComment {
+  id        String   @id @default(cuid())
+  rollId    String
+  roll      Roll     @relation(fields: [rollId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime @default(now())
+}
+
+model PhotoComment {
+  id        String   @id @default(cuid())
+  photoId   String
+  photo     Photo    @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime @default(now())
+}

@@ -1,0 +1,60 @@
+# ──────────────────────────────────────────────
+# Stage 1: Install dependencies
+# ──────────────────────────────────────────────
+FROM node:20-slim AS deps
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY package*.json ./
+COPY prisma ./prisma/
+RUN npm install
+RUN npx prisma generate
+
+# ──────────────────────────────────────────────
+# Stage 2: Build
+# ──────────────────────────────────────────────
+FROM node:20-slim AS builder
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npx prisma generate
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+# ──────────────────────────────────────────────
+# Stage 3: Runtime
+# ──────────────────────────────────────────────
+FROM node:20-slim AS runner
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV DATABASE_URL=file:/data/grained.db
+ENV UPLOAD_DIR=/data/uploads
+
+# Create non-root user
+RUN groupadd --system --gid 1001 nodejs \
+ && useradd --system --uid 1001 --gid nodejs nextjs
+
+# Copy standalone Next.js output
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+# Copy full node_modules for Prisma CLI (migrate deploy needs all transitive deps)
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+
+# Copy entrypoint
+COPY --chown=nextjs:nodejs docker-entrypoint.sh ./
+RUN chmod +x docker-entrypoint.sh
+
+# Data directory (will be overridden by volume mount)
+RUN mkdir -p /data/uploads && chown -R nextjs:nodejs /data
+
+USER nextjs
+EXPOSE 3000
+
+ENTRYPOINT ["./docker-entrypoint.sh"]

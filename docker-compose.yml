@@ -1,0 +1,23 @@
+services:
+  grained:
+    build: .
+    container_name: grained
+    ports:
+      - "3000:3000"
+    volumes:
+      - grained_data:/data
+    environment:
+      DATABASE_URL: file:/data/grained.db
+      UPLOAD_DIR: /data/uploads
+      HOSTNAME: "0.0.0.0"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  grained_data:
+    driver: local
