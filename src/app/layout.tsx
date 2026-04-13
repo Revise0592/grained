@@ -3,6 +3,8 @@ import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Nav } from '@/components/nav'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Grained',
   description: 'Film photography archive',

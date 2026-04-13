@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { Plus, Film, LogOut } from 'lucide-react'
 import { ThemeToggle } from './theme-toggle'
-import { cn } from '@/lib/utils'
 
 export function Nav({ authEnabled }: { authEnabled?: boolean }) {
   const pathname = usePathname()
@@ -26,22 +25,7 @@ export function Nav({ authEnabled }: { authEnabled?: boolean }) {
           <span className="font-semibold tracking-tight text-foreground text-base">Grained</span>
         </Link>
 
-        {/* Nav links */}
-        <nav className="hidden sm:flex items-center gap-1 text-sm">
-          <Link
-            href="/"
-            className={cn(
-              'px-3 py-1.5 rounded-md transition-colors',
-              pathname === '/'
-                ? 'bg-muted text-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-            )}
-          >
-            All Rolls
-          </Link>
-        </nav>
-
-        {/* Actions */}
+{/* Actions */}
         <div className="flex items-center gap-1">
           <ThemeToggle />
           <Link
