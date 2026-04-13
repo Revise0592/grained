@@ -34,27 +34,19 @@ ENV PORT=3000
 ENV DATABASE_URL=file:/data/grained.db
 ENV UPLOAD_DIR=/data/uploads
 
-# Create non-root user
-RUN groupadd --system --gid 1001 nodejs \
- && useradd --system --uid 1001 --gid nodejs nextjs
-
 # Copy standalone Next.js output
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
 
 # Copy full node_modules for Prisma CLI (migrate deploy needs all transitive deps)
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/prisma ./prisma
 
 # Copy entrypoint
-COPY --chown=nextjs:nodejs docker-entrypoint.sh ./
+COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
 
-# Data directory (will be overridden by volume mount)
-RUN mkdir -p /data/uploads && chown -R nextjs:nodejs /data
-
-USER nextjs
 EXPOSE 3000
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
