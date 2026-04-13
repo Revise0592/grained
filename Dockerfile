@@ -1,7 +1,7 @@
 # ──────────────────────────────────────────────
 # Stage 1: Install dependencies
 # ──────────────────────────────────────────────
-FROM node:20-slim AS deps
+FROM node:24-slim AS deps
 RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package*.json ./
@@ -12,7 +12,7 @@ RUN npx prisma generate
 # ──────────────────────────────────────────────
 # Stage 2: Build
 # ──────────────────────────────────────────────
-FROM node:20-slim AS builder
+FROM node:24-slim AS builder
 RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
@@ -24,7 +24,7 @@ RUN npm run build
 # ──────────────────────────────────────────────
 # Stage 3: Runtime
 # ──────────────────────────────────────────────
-FROM node:20-slim AS runner
+FROM node:24-slim AS runner
 RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 

@@ -25,7 +25,7 @@ A self-hosted archive for film photography. Import rolls from your lab's scan zi
 | Image processing | Sharp (thumbnails at 800 px) |
 | Zip extraction | adm-zip |
 | Styling | Tailwind CSS v3 + next-themes |
-| Runtime | Node.js 20 |
+| Runtime | Node.js 24 |
 | Deploy | Docker / Podman Compose |
 
 ---
