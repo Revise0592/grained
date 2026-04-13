@@ -36,41 +36,86 @@ A self-hosted archive for film photography. Import rolls from your lab's scan zi
 
 - Docker **or** Podman + podman-compose
 
-### Run with Docker Compose
+### 1. Clone the repo
 
 ```bash
 git clone https://github.com/Revise0592/grained.git
 cd grained
-docker compose up -d
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
-
-### Run with Podman Compose
-
-```bash
-git clone https://github.com/Revise0592/grained.git
-cd grained
-podman-compose up -d
-```
-
-> **Bazzite / immutable Fedora:** install podman-compose with `pip3 install --user podman-compose`.
-
-### Configuration
-
-All configuration is via environment variables. Copy `.env.example` to get started:
+### 2. Configure
 
 ```bash
 cp .env.example .env
 ```
 
+Edit `.env` to set your options — the defaults work fine for a basic local install:
+
+```env
+# Where the SQLite database is stored (inside the container)
+DATABASE_URL=file:/data/grained.db
+
+# Where uploaded scans and thumbnails are stored (inside the container)
+UPLOAD_DIR=/data/uploads
+
+# Optional: enable password protection
+AUTH_PASSWORD=your-password-here
+SESSION_SECRET=a-long-random-string
+```
+
+Leave `AUTH_PASSWORD` and `SESSION_SECRET` blank (or remove them) to run without a login screen.
+
+### 3. Start
+
+**Docker Compose**
+```bash
+docker compose up -d
+```
+
+**Podman Compose**
+```bash
+podman-compose up -d
+```
+
+> **Bazzite / immutable Fedora:** install podman-compose with `pip3 install --user podman-compose`.
+
+Open [http://localhost:3000](http://localhost:3000).
+
+### docker-compose.yml reference
+
+```yaml
+services:
+  grained:
+    build: .
+    container_name: grained
+    ports:
+      - "3000:3000"        # change left side to expose on a different host port
+    volumes:
+      - grained_data:/data  # all photos and the database live here
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-file:/data/grained.db}
+      UPLOAD_DIR: ${UPLOAD_DIR:-/data/uploads}
+      AUTH_PASSWORD: ${AUTH_PASSWORD:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
+    restart: unless-stopped
+
+volumes:
+  grained_data:
+    driver: local
+```
+
+All environment variables are read from your `.env` file at startup — you never need to edit `docker-compose.yml` directly.
+
+### Environment variables
+
 | Variable | Default | Description |
 |---|---|---|
-| `DATABASE_URL` | `file:/data/grained.db` | SQLite database path |
-| `UPLOAD_DIR` | `/data/uploads` | Directory for original scans and thumbnails |
-| `PORT` | `3000` | HTTP port |
+| `DATABASE_URL` | `file:/data/grained.db` | SQLite path inside the container |
+| `UPLOAD_DIR` | `/data/uploads` | Scan and thumbnail storage inside the container |
+| `AUTH_PASSWORD` | *(unset)* | Password for the login screen — omit to disable auth |
+| `SESSION_SECRET` | *(unset)* | Secret for signing session tokens — set a random string when using auth |
 
-Both paths default to `/data` inside the container, which is persisted via the `grained_data` Docker volume. Your photos and database never leave your machine.
+Both data paths default to `/data` inside the container, persisted by the `grained_data` named volume. Your archive never leaves your machine.
 
 ---
 
