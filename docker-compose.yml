@@ -1,6 +1,6 @@
 services:
   grained:
-    build: .
+    image: ghcr.io/revise0592/grained:latest
     container_name: grained
     ports:
       - "3000:3000"
