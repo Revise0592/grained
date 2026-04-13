@@ -7,12 +7,12 @@ import { ChevronLeft, Pencil, Trash2, Camera, Star, ImageIcon, CheckSquare, X, S
 import { cn, formatDate, imageUrl } from '@/lib/utils'
 import { Lightbox } from '@/components/lightbox'
 import { Comments } from '@/components/comments'
-import type { Roll, Photo, RollComment, Tag } from '@prisma/client'
+import type { Roll, Photo, RollComment, Tag as PrismaTag } from '@prisma/client'
 
 type RollWithRelations = Roll & {
   photos: Photo[]
   comments: RollComment[]
-  tags: Tag[]
+  tags: PrismaTag[]
 }
 
 export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
