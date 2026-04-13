@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '500mb',
     },
+    // Raise the body cap for route handlers (default 10 MB)
+    middlewareClientMaxBodySize: 500 * 1024 * 1024,
   },
 }
 

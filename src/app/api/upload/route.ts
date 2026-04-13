@@ -8,6 +8,7 @@ import { isImageFile, getUploadDir } from '@/lib/utils'
 import { generateUniqueSlug } from '@/lib/server-utils'
 
 export const maxDuration = 300
+export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
