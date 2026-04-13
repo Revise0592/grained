@@ -34,7 +34,7 @@ A self-hosted archive for film photography. Import rolls from your lab's scan zi
 
 ### Requirements
 
-- Docker **or** Podman + podman-compose
+- Docker, docker-compose
 
 ### 1. Clone the repo
 
@@ -65,6 +65,8 @@ SESSION_SECRET=a-long-random-string
 
 Leave `AUTH_PASSWORD` and `SESSION_SECRET` blank (or remove them) to run without a login screen.
 
+I recommend generating your SESSION_SECRET with ```openssl rand -base64 32```
+
 ### 3. Start
 
 **Docker Compose**
@@ -72,39 +74,7 @@ Leave `AUTH_PASSWORD` and `SESSION_SECRET` blank (or remove them) to run without
 docker compose up -d
 ```
 
-**Podman Compose**
-```bash
-podman-compose up -d
-```
-
-> **Bazzite / immutable Fedora:** install podman-compose with `pip3 install --user podman-compose`.
-
 Open [http://localhost:3000](http://localhost:3000).
-
-### docker-compose.yml reference
-
-```yaml
-services:
-  grained:
-    build: .
-    container_name: grained
-    ports:
-      - "3000:3000"        # change left side to expose on a different host port
-    volumes:
-      - grained_data:/data  # all photos and the database live here
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-file:/data/grained.db}
-      UPLOAD_DIR: ${UPLOAD_DIR:-/data/uploads}
-      AUTH_PASSWORD: ${AUTH_PASSWORD:-}
-      SESSION_SECRET: ${SESSION_SECRET:-}
-    restart: unless-stopped
-
-volumes:
-  grained_data:
-    driver: local
-```
-
-All environment variables are read from your `.env` file at startup — you never need to edit `docker-compose.yml` directly.
 
 ### Environment variables
 
@@ -114,8 +84,6 @@ All environment variables are read from your `.env` file at startup — you neve
 | `UPLOAD_DIR` | `/data/uploads` | Scan and thumbnail storage inside the container |
 | `AUTH_PASSWORD` | *(unset)* | Password for the login screen — omit to disable auth |
 | `SESSION_SECRET` | *(unset)* | Secret for signing session tokens — set a random string when using auth |
-
-Both data paths default to `/data` inside the container, persisted by the `grained_data` named volume. Your archive never leaves your machine.
 
 ---
 
