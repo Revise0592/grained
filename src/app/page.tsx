@@ -21,8 +21,7 @@ export default async function Home({
         _count: { select: { photos: true, comments: true } },
         photos: {
           orderBy: { order: 'asc' },
-          take: 1,
-          select: { id: true, path: true, filename: true },
+          select: { id: true, path: true, filename: true, rotation: true },
         },
         tags: { select: { name: true } },
       },

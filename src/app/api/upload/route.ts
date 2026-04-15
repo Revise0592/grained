@@ -70,11 +70,14 @@ export async function POST(request: NextRequest) {
       let height: number | null = null
 
       try {
-        const meta = await sharp(imgBuffer).metadata()
+        // .rotate() auto-rotates based on EXIF orientation and strips EXIF,
+        // so thumbnails and the browser-rendered full image agree on orientation.
+        const rotated = sharp(imgBuffer).rotate()
+        const meta = await rotated.clone().metadata()
         width = meta.width ?? null
         height = meta.height ?? null
 
-        await sharp(imgBuffer)
+        await rotated.clone()
           .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
           .jpeg({ quality: 82 })
           .toFile(path.join(thumbDir, `${path.basename(filename, ext)}.jpg`))

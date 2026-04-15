@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useCallback, useState } from 'react'
-import { X, ChevronLeft, ChevronRight, MessageSquare, Pencil, Check, RotateCcw, RotateCw, Trash2 } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, MessageSquare, Pencil, Check, RotateCcw, RotateCw, Trash2, ChevronUp, ChevronDown } from 'lucide-react'
 import { cn, imageUrl, formatDate } from '@/lib/utils'
 import type { Photo, PhotoComment } from '@prisma/client'
 import { Comments } from './comments'
@@ -36,8 +36,9 @@ export function Lightbox({ photos, initialIndex, onClose, onDelete, onRotate, ro
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [panel, setPanel] = useState<'info' | 'comments'>('info')
-  // Local rotation state so the UI responds immediately
   const [localRotation, setLocalRotation] = useState(0)
+  // Mobile: whether the bottom info panel is expanded
+  const [mobilePanel, setMobilePanel] = useState(false)
 
   const current = photos[index]
 
@@ -63,6 +64,8 @@ export function Lightbox({ photos, initialIndex, onClose, onDelete, onRotate, ro
     if (!current) return
     setPhoto(null)
     setEditing(false)
+    setMobilePanel(false)
+    setLocalRotation(current.rotation ?? 0)
     fetch(`/api/photos/${current.id}`)
       .then(r => r.json())
       .then((p: PhotoWithComments) => {
@@ -118,7 +121,6 @@ export function Lightbox({ photos, initialIndex, onClose, onDelete, onRotate, ro
     setDeleting(true)
     await fetch(`/api/photos/${current.id}`, { method: 'DELETE' })
     onDelete?.(current.id)
-    // Move to adjacent photo or close
     if (photos.length <= 1) {
       onClose()
     } else if (index >= photos.length - 1) {
@@ -134,7 +136,6 @@ export function Lightbox({ photos, initialIndex, onClose, onDelete, onRotate, ro
     return `/api/images/${parts[0]}/thumbs/${parts.slice(1).join('/')}`
   }
 
-  // For 90/270 rotations we constrain differently so image stays within the pane
   const isTransverse = localRotation === 90 || localRotation === 270
   const imgStyle = {
     transform: `rotate(${localRotation}deg)`,
@@ -143,58 +144,106 @@ export function Lightbox({ photos, initialIndex, onClose, onDelete, onRotate, ro
     maxHeight: isTransverse ? '70vw' : '100%',
   }
 
+  const infoPanelContent = (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-white/40 truncate">{current.originalName}</p>
+        <button
+          onClick={() => editing ? saveForm() : setEditing(true)}
+          disabled={saving}
+          className="flex items-center gap-1 text-xs text-white/40 hover:text-accent transition-colors"
+        >
+          {editing ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+          {editing ? (saving ? 'Saving…' : 'Save') : 'Edit'}
+        </button>
+      </div>
+
+      {current.width && current.height && (
+        <p className="text-xs text-white/30">{current.width} × {current.height}</p>
+      )}
+
+      <div className="space-y-3">
+        <MetaField label="Frame #" value={photo?.frameNumber?.toString() ?? null} editValue={form.frameNumber} editing={editing} type="number" onChange={v => setForm(f => ({ ...f, frameNumber: v }))} />
+        <MetaField label="Shutter" value={photo?.shutterSpeed ?? null} editValue={form.shutterSpeed} editing={editing} placeholder="e.g. 1/250" onChange={v => setForm(f => ({ ...f, shutterSpeed: v }))} />
+        <MetaField label="Aperture" value={photo?.aperture ?? null} editValue={form.aperture} editing={editing} placeholder="e.g. f/2.8" onChange={v => setForm(f => ({ ...f, aperture: v }))} />
+        <MetaField label="EV Comp" value={photo?.exposureComp ?? null} editValue={form.exposureComp} editing={editing} placeholder="e.g. +1" onChange={v => setForm(f => ({ ...f, exposureComp: v }))} />
+        <MetaField label="Focal Length" value={photo?.focalLength ?? rollInfo?.lens ?? null} editValue={form.focalLength} editing={editing} placeholder="e.g. 50mm" onChange={v => setForm(f => ({ ...f, focalLength: v }))} />
+
+        {editing ? (
+          <div>
+            <label className="text-xs text-white/40 block mb-1">Notes</label>
+            <textarea
+              value={form.notes}
+              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+              className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white resize-none h-20 focus:outline-none focus:border-accent/50"
+              placeholder="Frame notes…"
+            />
+          </div>
+        ) : photo?.notes ? (
+          <div>
+            <p className="text-xs text-white/40 mb-1">Notes</p>
+            <p className="text-xs text-white/70 leading-relaxed">{photo.notes}</p>
+          </div>
+        ) : null}
+
+        {!editing && localRotation !== 0 && (
+          <div className="flex justify-between items-baseline gap-2">
+            <span className="text-xs text-white/40">Rotation</span>
+            <span className="text-xs text-white/80">{localRotation}°</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
   return (
     <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 shrink-0">
+      <div className="flex items-center justify-between px-3 py-2 shrink-0">
         <span className="text-sm text-white/60 font-mono">
           {index + 1} / {photos.length}
-          {photo?.frameNumber != null && <span className="ml-2">· Frame {photo.frameNumber}</span>}
+          {photo?.frameNumber != null && <span className="ml-2 hidden sm:inline">· Frame {photo.frameNumber}</span>}
         </span>
 
-        <div className="flex items-center gap-1">
-          {/* Rotate */}
-          <button
-            onClick={() => rotate('ccw')}
-            title="Rotate left"
-            className="p-1.5 rounded-md text-white/50 hover:text-white hover:bg-white/10 transition-colors"
-          >
+        <div className="flex items-center gap-0.5">
+          <button onClick={() => rotate('ccw')} title="Rotate left" className="p-2 rounded-md text-white/50 hover:text-white hover:bg-white/10 transition-colors">
             <RotateCcw className="h-4 w-4" />
           </button>
-          <button
-            onClick={() => rotate('cw')}
-            title="Rotate right"
-            className="p-1.5 rounded-md text-white/50 hover:text-white hover:bg-white/10 transition-colors"
-          >
+          <button onClick={() => rotate('cw')} title="Rotate right" className="p-2 rounded-md text-white/50 hover:text-white hover:bg-white/10 transition-colors">
             <RotateCw className="h-4 w-4" />
           </button>
 
           <div className="w-px h-4 bg-white/10 mx-1" />
 
-          {/* Delete */}
+          {/* Info toggle — mobile only */}
           <button
-            onClick={deletePhoto}
-            disabled={deleting}
-            title="Delete photo"
-            className="p-1.5 rounded-md text-white/50 hover:text-red-400 hover:bg-white/10 transition-colors disabled:opacity-30"
+            onClick={() => setMobilePanel(v => !v)}
+            title="Info"
+            className={cn(
+              'md:hidden p-2 rounded-md transition-colors',
+              mobilePanel ? 'text-accent bg-white/10' : 'text-white/50 hover:text-white hover:bg-white/10'
+            )}
           >
+            <MessageSquare className="h-4 w-4" />
+          </button>
+
+          <div className="w-px h-4 bg-white/10 mx-1 md:hidden" />
+
+          <button onClick={deletePhoto} disabled={deleting} title="Delete photo" className="p-2 rounded-md text-white/50 hover:text-red-400 hover:bg-white/10 transition-colors disabled:opacity-30">
             <Trash2 className="h-4 w-4" />
           </button>
 
           <div className="w-px h-4 bg-white/10 mx-1" />
 
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-          >
+          <button onClick={onClose} className="p-2 rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors">
             <X className="h-5 w-5" />
           </button>
         </div>
       </div>
 
       {/* Main area */}
-      <div className="flex flex-1 overflow-hidden min-h-0">
-        {/* Photo */}
+      <div className="flex flex-1 overflow-hidden min-h-0 relative">
+        {/* Photo pane */}
         <div className="flex-1 flex items-center justify-center relative min-w-0 p-4 overflow-hidden">
           <button
             onClick={prev}
@@ -222,8 +271,8 @@ export function Lightbox({ photos, initialIndex, onClose, onDelete, onRotate, ro
           </button>
         </div>
 
-        {/* Side panel */}
-        <div className="w-72 shrink-0 border-l border-white/10 flex flex-col bg-black/40 overflow-hidden">
+        {/* Side panel — desktop only */}
+        <div className="hidden md:flex w-72 shrink-0 border-l border-white/10 flex-col bg-black/40 overflow-hidden">
           <div className="flex border-b border-white/10 shrink-0">
             {(['info', 'comments'] as const).map(tab => (
               <button
@@ -250,68 +299,60 @@ export function Lightbox({ photos, initialIndex, onClose, onDelete, onRotate, ro
           </div>
 
           <div className="flex-1 overflow-y-auto scrollbar-thin p-4">
-            {panel === 'info' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-white/40 truncate">{current.originalName}</p>
-                  <button
-                    onClick={() => editing ? saveForm() : setEditing(true)}
-                    disabled={saving}
-                    className="flex items-center gap-1 text-xs text-white/40 hover:text-accent transition-colors"
-                  >
-                    {editing ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
-                    {editing ? (saving ? 'Saving…' : 'Save') : 'Edit'}
-                  </button>
-                </div>
-
-                {current.width && current.height && (
-                  <p className="text-xs text-white/30">{current.width} × {current.height}</p>
-                )}
-
-                <div className="space-y-3">
-                  <MetaField label="Frame #" value={photo?.frameNumber?.toString() ?? null} editValue={form.frameNumber} editing={editing} type="number" onChange={v => setForm(f => ({ ...f, frameNumber: v }))} />
-                  <MetaField label="Shutter" value={photo?.shutterSpeed ?? null} editValue={form.shutterSpeed} editing={editing} placeholder="e.g. 1/250" onChange={v => setForm(f => ({ ...f, shutterSpeed: v }))} />
-                  <MetaField label="Aperture" value={photo?.aperture ?? null} editValue={form.aperture} editing={editing} placeholder="e.g. f/2.8" onChange={v => setForm(f => ({ ...f, aperture: v }))} />
-                  <MetaField label="EV Comp" value={photo?.exposureComp ?? null} editValue={form.exposureComp} editing={editing} placeholder="e.g. +1" onChange={v => setForm(f => ({ ...f, exposureComp: v }))} />
-                  <MetaField label="Focal Length" value={photo?.focalLength ?? rollInfo?.lens ?? null} editValue={form.focalLength} editing={editing} placeholder="e.g. 50mm" onChange={v => setForm(f => ({ ...f, focalLength: v }))} />
-
-                  {editing ? (
-                    <div>
-                      <label className="text-xs text-white/40 block mb-1">Notes</label>
-                      <textarea
-                        value={form.notes}
-                        onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                        className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white resize-none h-20 focus:outline-none focus:border-accent/50"
-                        placeholder="Frame notes…"
-                      />
-                    </div>
-                  ) : photo?.notes ? (
-                    <div>
-                      <p className="text-xs text-white/40 mb-1">Notes</p>
-                      <p className="text-xs text-white/70 leading-relaxed">{photo.notes}</p>
-                    </div>
-                  ) : null}
-
-                  {!editing && localRotation !== 0 && (
-                    <div className="flex justify-between items-baseline gap-2">
-                      <span className="text-xs text-white/40">Rotation</span>
-                      <span className="text-xs text-white/80">{localRotation}°</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
+            {panel === 'info' && infoPanelContent}
             {panel === 'comments' && current && (
               <Comments photoId={current.id} initialComments={photo?.comments ?? []} dark />
             )}
           </div>
         </div>
+
+        {/* Mobile info overlay — slides up from bottom */}
+        {mobilePanel && (
+          <div className="md:hidden absolute inset-x-0 bottom-0 bg-black/95 border-t border-white/10 z-20 flex flex-col max-h-[60%]">
+            {/* Tab bar */}
+            <div className="flex border-b border-white/10 shrink-0">
+              {(['info', 'comments'] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setPanel(tab)}
+                  className={cn(
+                    'flex-1 py-2.5 text-xs font-medium capitalize transition-colors',
+                    panel === tab ? 'text-white border-b border-accent' : 'text-white/40 hover:text-white/70'
+                  )}
+                >
+                  {tab === 'comments' ? (
+                    <span className="flex items-center justify-center gap-1">
+                      <MessageSquare className="h-3 w-3" />
+                      Comments
+                      {photo && photo.comments.length > 0 && (
+                        <span className="bg-accent text-accent-foreground text-xs rounded-full w-4 h-4 flex items-center justify-center text-[10px]">
+                          {photo.comments.length}
+                        </span>
+                      )}
+                    </span>
+                  ) : 'Info'}
+                </button>
+              ))}
+              <button
+                onClick={() => setMobilePanel(false)}
+                className="px-3 text-white/40 hover:text-white transition-colors"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {panel === 'info' && infoPanelContent}
+              {panel === 'comments' && current && (
+                <Comments photoId={current.id} initialComments={photo?.comments ?? []} dark />
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Filmstrip */}
+      {/* Filmstrip — hidden on mobile */}
       {photos.length > 1 && (
-        <div className="h-16 shrink-0 flex items-center gap-1 px-4 overflow-x-auto scrollbar-thin border-t border-white/10">
+        <div className="hidden sm:flex h-16 shrink-0 items-center gap-1 px-4 overflow-x-auto scrollbar-thin border-t border-white/10">
           {photos.map((p, i) => (
             <button
               key={p.id}

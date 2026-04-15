@@ -6,14 +6,16 @@ import { cn, formatDate, imageUrl } from '@/lib/utils'
 import type { Roll, Photo } from '@prisma/client'
 
 type RollWithMeta = Roll & {
-  photos: Pick<Photo, 'id' | 'path' | 'filename'>[]
+  photos: Pick<Photo, 'id' | 'path' | 'filename' | 'rotation'>[]
   _count: { photos: number; comments: number }
 }
 
 export function RollCard({ roll }: { roll: RollWithMeta }) {
   const cover = roll.coverPhotoId
-    ? roll.photos.find(p => p.id === roll.coverPhotoId) ?? roll.photos[0]
+    ? (roll.photos.find(p => p.id === roll.coverPhotoId) ?? roll.photos[0])
     : roll.photos[0]
+  const coverRotation = cover?.rotation ?? 0
+  const coverIsTransverse = coverRotation === 90 || coverRotation === 270
 
   return (
     <Link
@@ -27,6 +29,7 @@ export function RollCard({ roll }: { roll: RollWithMeta }) {
             src={imageUrl(cover.path, true)}
             alt={roll.name}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+            style={coverRotation ? { transform: `rotate(${coverRotation}deg)${coverIsTransverse ? ' scale(1.4)' : ''}` } : undefined}
             loading="lazy"
           />
         ) : (
