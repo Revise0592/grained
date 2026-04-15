@@ -91,7 +91,8 @@ function streamUploadToDisk(request: NextRequest): Promise<ParsedUpload> {
 
     bb.on('error', reject)
 
-    Readable.fromWeb(request.body as ReadableStream<Uint8Array>).pipe(bb)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    Readable.fromWeb(request.body as any).pipe(bb)
   })
 }
 
