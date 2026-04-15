@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grained — Self-hosted film photography archive</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=DM+Mono:wght@300;400&family=DM+Sans:wght@300;400&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0e0d0b;
+      --bg2: #141310;
+      --bg3: #1c1a17;
+      --warm: #c8b89a;
+      --warm-dim: #7a6e5e;
+      --warm-faint: #2a261f;
+      --text: #e8e0d4;
+      --text-dim: #9c9080;
+      --accent: #d4a96a;
+      --accent-dim: #7a5e35;
+      --border: rgba(200, 184, 154, 0.10);
+      --border-strong: rgba(200, 184, 154, 0.20);
+      --grain-size: 80px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 300;
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* grain overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 100;
+      opacity: 0.6;
+    }
+
+    /* — NAV — */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 50;
+      padding: 1.25rem 2.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      background: rgba(14, 13, 11, 0.85);
+      backdrop-filter: blur(12px);
+    }
+
+    .nav-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.2rem;
+      letter-spacing: 0.15em;
+      color: var(--warm);
+      text-transform: lowercase;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--warm); }
+
+    /* — HERO — */
+    .hero {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: center;
+      padding: 6rem 2.5rem 4rem;
+      gap: 4rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .hero-text { padding-top: 2rem; }
+
+    .hero-eyebrow {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .hero-eyebrow::before {
+      content: '';
+      display: block;
+      width: 2rem;
+      height: 1px;
+      background: var(--accent);
+    }
+
+    .hero-title {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(3rem, 6vw, 5rem);
+      font-weight: 400;
+      line-height: 1.05;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      margin-bottom: 1.5rem;
+    }
+
+    .hero-title em {
+      font-style: italic;
+      color: var(--warm);
+    }
+
+    .hero-desc {
+      font-size: 1.05rem;
+      color: var(--text-dim);
+      line-height: 1.8;
+      max-width: 38ch;
+      margin-bottom: 2.5rem;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--accent);
+      color: #1a1208;
+      text-decoration: none;
+      padding: 0.75rem 1.5rem;
+      font-size: 0.85rem;
+      font-weight: 400;
+      letter-spacing: 0.05em;
+      transition: opacity 0.2s, transform 0.2s;
+    }
+
+    .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--warm-dim);
+      text-decoration: none;
+      font-size: 0.85rem;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--accent-dim);
+      padding-bottom: 0.15rem;
+      transition: color 0.2s, border-color 0.2s;
+    }
+
+    .btn-secondary:hover { color: var(--warm); border-color: var(--accent); }
+
+    /* — HERO VISUAL — */
+    .hero-visual {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .film-strip {
+      position: relative;
+      width: 100%;
+      max-width: 440px;
+    }
+
+    .film-frame-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3px;
+      padding: 1.5rem;
+      background: #0a0905;
+      border: 1px solid var(--border-strong);
+      position: relative;
+    }
+
+    .film-frame-grid::before,
+    .film-frame-grid::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0;
+      height: 1.25rem;
+      background: repeating-linear-gradient(
+        90deg,
+        transparent 0, transparent 0.45rem,
+        #1a1710 0.45rem, #1a1710 0.7rem
+      );
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .film-frame-grid::before { top: 0; }
+    .film-frame-grid::after { bottom: 0; }
+
+    .film-frame {
+      aspect-ratio: 3/2;
+      background: var(--bg3);
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .film-frame::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(212,169,106,0.04) 0%, transparent 60%);
+    }
+
+    .frame-inner {
+      width: 100%; height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* abstract scene fills */
+    .frame-1 { background: linear-gradient(160deg, #1a1510 0%, #2a1f0e 40%, #0e0c09 100%); }
+    .frame-2 { background: linear-gradient(200deg, #110f0d 0%, #1f1a12 50%, #2e2318 100%); }
+    .frame-3 { background: linear-gradient(120deg, #0d0c0a 0%, #1a1610 50%, #251e12 100%); }
+    .frame-4 { background: linear-gradient(170deg, #1c1812 0%, #120f0b 60%, #201a10 100%); }
+
+    .frame-num {
+      position: absolute;
+      bottom: 0.35rem;
+      right: 0.45rem;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.55rem;
+      color: var(--warm-dim);
+      letter-spacing: 0.1em;
+      opacity: 0.6;
+    }
+
+    .film-meta {
+      margin-top: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .film-meta-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--warm-dim);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .film-meta-badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.6rem;
+      color: var(--accent);
+      border: 1px solid var(--accent-dim);
+      padding: 0.2rem 0.55rem;
+      letter-spacing: 0.08em;
+    }
+
+    /* — DIVIDER — */
+    .section-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 0;
+    }
+
+    /* — FEATURES — */
+    .features {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 6rem 2.5rem;
+    }
+
+    .section-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 3.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .section-label::before {
+      content: '';
+      display: block;
+      width: 1.5rem;
+      height: 1px;
+      background: var(--accent);
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+      border: 1px solid var(--border);
+    }
+
+    .feature-card {
+      padding: 2.5rem 2rem;
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      transition: background 0.3s;
+    }
+
+    .feature-card:hover { background: var(--warm-faint); }
+    .feature-card:nth-child(3n) { border-right: none; }
+    .feature-card:nth-last-child(-n+3) { border-bottom: none; }
+
+    .feature-icon {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--accent-dim);
+      letter-spacing: 0.1em;
+      margin-bottom: 1.25rem;
+    }
+
+    .feature-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.15rem;
+      font-weight: 400;
+      color: var(--warm);
+      margin-bottom: 0.75rem;
+      line-height: 1.3;
+    }
+
+    .feature-desc {
+      font-size: 0.88rem;
+      color: var(--text-dim);
+      line-height: 1.75;
+    }
+
+    /* — HOW IT WORKS — */
+    .how-it-works {
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .how-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 6rem 2.5rem;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      margin-top: 4rem;
+      border: 1px solid var(--border);
+    }
+
+    .step {
+      padding: 2.5rem 1.75rem;
+      border-right: 1px solid var(--border);
+      position: relative;
+    }
+
+    .step:last-child { border-right: none; }
+
+    .step-num {
+      font-family: 'DM Mono', monospace;
+      font-size: 2.5rem;
+      color: var(--warm-faint);
+      line-height: 1;
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1rem;
+    }
+
+    .step-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1rem;
+      font-weight: 400;
+      color: var(--warm);
+      margin-bottom: 0.6rem;
+    }
+
+    .step-desc {
+      font-size: 0.83rem;
+      color: var(--text-dim);
+      line-height: 1.7;
+    }
+
+    /* — STACK — */
+    .stack-section {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 6rem 2.5rem;
+    }
+
+    .stack-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 3rem;
+      font-size: 0.88rem;
+    }
+
+    .stack-table thead th {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      text-align: left;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border-strong);
+    }
+
+    .stack-table tbody td {
+      padding: 1rem 1rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    .stack-table tbody tr:last-child td { border-bottom: none; }
+    .stack-table tbody tr:hover td { background: var(--warm-faint); }
+
+    .stack-layer {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--accent);
+      letter-spacing: 0.05em;
+    }
+
+    .stack-tech {
+      font-size: 0.9rem;
+      color: var(--text);
+    }
+
+    .stack-note {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+    }
+
+    /* — INSTALL — */
+    .install-section {
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+    }
+
+    .install-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 6rem 2.5rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6rem;
+      align-items: start;
+    }
+
+    .install-text h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 2.2rem;
+      font-weight: 400;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 1.25rem;
+    }
+
+    .install-text p {
+      font-size: 0.92rem;
+      color: var(--text-dim);
+      line-height: 1.8;
+      margin-bottom: 2rem;
+    }
+
+    .env-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+      margin-top: 2rem;
+    }
+
+    .env-table th {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid var(--border-strong);
+    }
+
+    .env-table td {
+      padding: 0.65rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    .env-table tr:last-child td { border-bottom: none; }
+
+    .env-key {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--accent);
+    }
+
+    .env-default {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text-dim);
+    }
+
+    .env-note { font-size: 0.78rem; color: var(--text-dim); }
+
+    .code-block {
+      background: #090807;
+      border: 1px solid var(--border-strong);
+      padding: 1.75rem;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      line-height: 2;
+      color: var(--text-dim);
+      overflow-x: auto;
+    }
+
+    .code-block .cm { color: var(--warm-dim); }
+    .code-block .kw { color: var(--accent); }
+    .code-block .st { color: var(--warm); }
+
+    /* — FOOTER — */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 3rem 2.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .footer-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1rem;
+      color: var(--warm-dim);
+      letter-spacing: 0.15em;
+      text-transform: lowercase;
+    }
+
+    .footer-note {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+    }
+
+    .footer-link {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.08em;
+      border-bottom: 1px solid var(--border);
+      transition: color 0.2s;
+    }
+
+    .footer-link:hover { color: var(--warm); }
+
+    /* — RESPONSIVE — */
+    @media (max-width: 900px) {
+      .hero { grid-template-columns: 1fr; padding: 7rem 1.5rem 3rem; gap: 3rem; }
+      .hero-visual { justify-content: flex-start; }
+      .film-strip { max-width: 360px; }
+      .features-grid { grid-template-columns: 1fr 1fr; }
+      .feature-card:nth-child(2n) { border-right: none; }
+      .feature-card:nth-child(3n) { border-right: 1px solid var(--border); }
+      .steps { grid-template-columns: 1fr 1fr; }
+      .step:nth-child(2n) { border-right: none; }
+      .step:nth-child(n+3) { border-top: 1px solid var(--border); }
+      .install-inner { grid-template-columns: 1fr; gap: 3rem; }
+    }
+
+    @media (max-width: 600px) {
+      nav { padding: 1rem 1.25rem; }
+      .nav-links { display: none; }
+      .features-grid { grid-template-columns: 1fr; }
+      .feature-card { border-right: none; }
+      .steps { grid-template-columns: 1fr; }
+      .step { border-right: none; border-bottom: 1px solid var(--border); }
+      footer { flex-direction: column; gap: 1rem; text-align: center; }
+    }
+
+    /* — ANIMATIONS — */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .hero-eyebrow { animation: fadeUp 0.6s ease both; }
+    .hero-title   { animation: fadeUp 0.6s 0.1s ease both; }
+    .hero-desc    { animation: fadeUp 0.6s 0.2s ease both; }
+    .hero-actions { animation: fadeUp 0.6s 0.3s ease both; }
+    .film-strip   { animation: fadeUp 0.8s 0.25s ease both; }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <span class="nav-logo">grained</span>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how-it-works">How it works</a></li>
+      <li><a href="#install">Install</a></li>
+      <li><a href="https://github.com/Revise0592/grained" target="_blank" rel="noopener">GitHub ↗</a></li>
+    </ul>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-text">
+      <p class="hero-eyebrow">Self-hosted · Open source</p>
+      <h1 class="hero-title">Your rolls.<br /><em>Your archive.</em></h1>
+      <p class="hero-desc">
+        Grained is a self-hosted archive for film photographers. Import your lab scan zips, log roll metadata, browse a full-screen lightbox, and annotate individual frames — with no accounts, no cloud, no telemetry.
+      </p>
+      <div class="hero-actions">
+        <a href="#install" class="btn-primary">Get started →</a>
+        <a href="https://github.com/Revise0592/grained" class="btn-secondary" target="_blank" rel="noopener">View on GitHub ↗</a>
+      </div>
+    </div>
+
+    <div class="hero-visual">
+      <div class="film-strip">
+        <div class="film-frame-grid">
+          <div class="film-frame frame-1"><div class="frame-inner"></div><span class="frame-num">001</span></div>
+          <div class="film-frame frame-2"><div class="frame-inner"></div><span class="frame-num">002</span></div>
+          <div class="film-frame frame-3"><div class="frame-inner"></div><span class="frame-num">003</span></div>
+          <div class="film-frame frame-4"><div class="frame-inner"></div><span class="frame-num">004</span></div>
+        </div>
+        <div class="film-meta">
+          <span class="film-meta-label">Kodak Portra 400 · 35mm</span>
+          <span class="film-meta-badge">C-41</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="section-divider" />
+
+  <!-- FEATURES -->
+  <section class="features" id="features">
+    <p class="section-label">Features</p>
+    <div class="features-grid">
+
+      <div class="feature-card">
+        <p class="feature-icon">01 — Import</p>
+        <h3 class="feature-title">Zip import</h3>
+        <p class="feature-desc">Drop a lab scan zip and Grained extracts, sorts, and thumbnails every frame automatically. Supports JPG, TIFF, PNG, HEIC, and WebP.</p>
+      </div>
+
+      <div class="feature-card">
+        <p class="feature-icon">02 — Metadata</p>
+        <h3 class="feature-title">Roll metadata</h3>
+        <p class="feature-desc">Log film stock, format (35mm / 120 / 4×5), ISO, push/pull, camera, lens, lab, and develop process — C-41, E-6, B&amp;W, cross-process.</p>
+      </div>
+
+      <div class="feature-card">
+        <p class="feature-icon">03 — Browse</p>
+        <h3 class="feature-title">Lightbox viewer</h3>
+        <p class="feature-desc">Full-screen viewer with keyboard navigation, CW/CCW rotation, and a per-frame info panel that keeps your data close at hand.</p>
+      </div>
+
+      <div class="feature-card">
+        <p class="feature-icon">04 — Annotate</p>
+        <h3 class="feature-title">Per-frame data</h3>
+        <p class="feature-desc">Frame number, shutter speed, aperture, EV compensation, focal length, and freeform notes — per frame, per roll.</p>
+      </div>
+
+      <div class="feature-card">
+        <p class="feature-icon">05 — Discuss</p>
+        <h3 class="feature-title">Comment threads</h3>
+        <p class="feature-desc">Per-roll and per-frame comment threads let you journal your thoughts, remind yourself of settings, or document the shoot.</p>
+      </div>
+
+      <div class="feature-card">
+        <p class="feature-icon">06 — Manage</p>
+        <h3 class="feature-title">Cover &amp; select</h3>
+        <p class="feature-desc">Pin any frame as the roll's cover in the catalog grid. Multi-select photos for bulk deletion, or delete individual frames.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="how-it-works" id="how-it-works">
+    <div class="how-inner">
+      <p class="section-label">How it works</p>
+      <div class="steps">
+
+        <div class="step">
+          <div class="step-num">01</div>
+          <h3 class="step-title">Get your scans</h3>
+          <p class="step-desc">Request a zip of scans from your lab. Most mail-in labs offer this as a standard delivery option.</p>
+        </div>
+
+        <div class="step">
+          <div class="step-num">02</div>
+          <h3 class="step-title">Create a roll</h3>
+          <p class="step-desc">Click <em>New Roll</em>, drag your zip onto the upload zone, give the roll a name, and hit <em>Import Roll</em>.</p>
+        </div>
+
+        <div class="step">
+          <div class="step-num">03</div>
+          <h3 class="step-title">Fill metadata</h3>
+          <p class="step-desc">Edit roll details — film stock, camera, lens, dates, develop process — via the Edit panel. Frame data goes frame-by-frame.</p>
+        </div>
+
+        <div class="step">
+          <div class="step-num">04</div>
+          <h3 class="step-title">Browse forever</h3>
+          <p class="step-desc">Your archive lives in a named Docker volume, completely separate from the app. Updates never touch your photos or database.</p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- STACK -->
+  <section class="stack-section">
+    <p class="section-label">Stack</p>
+    <table class="stack-table">
+      <thead>
+        <tr>
+          <th>Layer</th>
+          <th>Technology</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="stack-layer">Framework</span></td>
+          <td><span class="stack-tech">Next.js 15</span></td>
+          <td><span class="stack-note">App Router, standalone output</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-layer">Database</span></td>
+          <td><span class="stack-tech">SQLite via Prisma 6</span></td>
+          <td><span class="stack-note">Migrations run automatically on startup</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-layer">Images</span></td>
+          <td><span class="stack-tech">Sharp</span></td>
+          <td><span class="stack-note">Thumbnails at 800 px</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-layer">Zip handling</span></td>
+          <td><span class="stack-tech">adm-zip</span></td>
+          <td><span class="stack-note">Extracts and sorts frames on import</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-layer">Styling</span></td>
+          <td><span class="stack-tech">Tailwind CSS v3</span></td>
+          <td><span class="stack-note">Dark / light via next-themes</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-layer">Runtime</span></td>
+          <td><span class="stack-tech">Node.js 24</span></td>
+          <td><span class="stack-note">Docker + Docker Compose</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- INSTALL -->
+  <section class="install-section" id="install">
+    <div class="install-inner">
+      <div class="install-text">
+        <p class="section-label">Install</p>
+        <h2>Up in three<br /><em style="font-family:'Playfair Display',serif;font-style:italic;color:var(--warm);">commands.</em></h2>
+        <p>Grained runs entirely in Docker. No external services, no signup, no cloud dependency — just a container and a volume.</p>
+
+        <table class="env-table">
+          <thead>
+            <tr>
+              <th>Variable</th>
+              <th>Default</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="env-key">DATABASE_URL</span></td>
+              <td><span class="env-default">file:/data/grained.db</span></td>
+              <td><span class="env-note">SQLite path inside the container</span></td>
+            </tr>
+            <tr>
+              <td><span class="env-key">UPLOAD_DIR</span></td>
+              <td><span class="env-default">/data/uploads</span></td>
+              <td><span class="env-note">Scan and thumbnail storage</span></td>
+            </tr>
+            <tr>
+              <td><span class="env-key">AUTH_PASSWORD</span></td>
+              <td><span class="env-default">unset</span></td>
+              <td><span class="env-note">Omit to disable login</span></td>
+            </tr>
+            <tr>
+              <td><span class="env-key">SESSION_SECRET</span></td>
+              <td><span class="env-default">unset</span></td>
+              <td><span class="env-note">Required when using auth</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div>
+        <div class="code-block">
+<span class="cm"># 1. Clone</span><br />
+<span class="kw">git clone</span> https://github.com/Revise0592/grained.git<br />
+<span class="kw">cd</span> grained<br />
+<br />
+<span class="cm"># 2. Configure</span><br />
+<span class="kw">cp</span> .env.example .env<br />
+<span class="cm"># edit .env — defaults work for local use</span><br />
+<br />
+<span class="cm"># 3. Start</span><br />
+<span class="kw">docker compose up</span> -d<br />
+<br />
+<span class="cm"># Open http://localhost:3000</span>
+        </div>
+
+        <p style="margin-top: 1.5rem; font-size: 0.8rem; color: var(--text-dim); line-height: 1.7;">
+          All your data — photos and database — lives in the <span style="font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--accent);">grained_data</span> named volume. Updating Grained is a pull and restart; your archive is always safe.
+        </p>
+
+        <p style="margin-top: 1.25rem; font-size: 0.8rem; color: var(--text-dim); line-height: 1.7;">
+          Generate a session secret with:<br />
+          <span style="font-family:'DM Mono',monospace;font-size:0.72rem;color:var(--warm-dim);">openssl rand -base64 32</span>
+        </p>
+
+        <div style="margin-top: 2rem; display: flex; gap: 1rem;">
+          <a href="https://github.com/Revise0592/grained" class="btn-primary" target="_blank" rel="noopener">GitHub ↗</a>
+          <a href="https://github.com/Revise0592/grained/issues" class="btn-secondary" target="_blank" rel="noopener">Report an issue ↗</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <span class="footer-logo">grained</span>
+    <span class="footer-note">A self-hosted archive for film photography.</span>
+    <a href="https://github.com/Revise0592/grained" class="footer-link" target="_blank" rel="noopener">github.com/Revise0592/grained</a>
+  </footer>
+
+</body>
+</html>
