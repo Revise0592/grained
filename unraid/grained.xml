@@ -1,0 +1,67 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Grained</Name>
+  <Repository>ghcr.io/revise0592/grained:latest</Repository>
+  <Registry>https://github.com/Revise0592/grained/pkgs/container/grained</Registry>
+  <Network>bridge</Network>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/Revise0592/grained/issues</Support>
+  <Project>https://github.com/Revise0592/grained</Project>
+  <Overview>Self-hosted film photography archive. Upload rolls from lab scan zip files, organise by film stock, format, and tags, browse in a full-screen lightbox, rotate and annotate frames, and share your archive with others.[br][br]Supports JPEG, PNG, TIFF, HEIC, and WebP. Thumbnails are generated automatically on upload. Optional password protection.</Overview>
+  <Category>MediaApp:Photos</Category>
+  <WebUI>http://[IP]:[PORT:3000]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/Revise0592/grained/main/unraid/grained.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/Revise0592/grained/main/unraid/icon.svg</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Description>Self-hosted film photography archive. Upload rolls from lab scan zip files, organise by film stock, format, and tags, browse in a full-screen lightbox, rotate and annotate frames, and share your archive with others. Supports JPEG, PNG, TIFF, HEIC, and WebP. Thumbnails are generated automatically on upload. Optional password protection.</Description>
+
+  <Config
+    Name="Host Port"
+    Target="3000"
+    Default="3000"
+    Mode="tcp"
+    Description="Port the web interface will be available on."
+    Type="Port"
+    Display="always"
+    Required="true"
+    Mask="false">3000</Config>
+
+  <Config
+    Name="Data Path"
+    Target="/data"
+    Default="/mnt/user/appdata/grained"
+    Mode="rw"
+    Description="Where Grained stores its database and uploaded photos. Back this up."
+    Type="Path"
+    Display="always"
+    Required="true"
+    Mask="false">/mnt/user/appdata/grained</Config>
+
+  <Config
+    Name="Auth Password"
+    Target="AUTH_PASSWORD"
+    Default=""
+    Mode=""
+    Description="Password to protect the app. Leave empty to disable authentication."
+    Type="Variable"
+    Display="always"
+    Required="false"
+    Mask="true"/>
+
+  <Config
+    Name="Session Secret"
+    Target="SESSION_SECRET"
+    Default=""
+    Mode=""
+    Description="Random secret used to sign session tokens. Required if Auth Password is set. Generate one with: openssl rand -hex 32"
+    Type="Variable"
+    Display="always"
+    Required="false"
+    Mask="true"/>
+
+</Container>
