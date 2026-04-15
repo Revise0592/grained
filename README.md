@@ -131,6 +131,6 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ---
 
-## License
+## AI Disclosure
 
-MIT
+I have used AI in the creation in this project, namely with the database side of things. Im using it as more of a learning tool rather than a crutch. I do understand what my code is doing, and I am open to any issue requests to improve this tool. Thank you.
