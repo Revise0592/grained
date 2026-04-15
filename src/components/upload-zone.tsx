@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useRef, DragEvent } from 'react'
+import { useState, useRef } from 'react'
 import { UploadCloud, FileArchive, AlertCircle, Loader2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 
 interface UploadZoneProps {
@@ -11,7 +10,6 @@ interface UploadZoneProps {
 
 export function UploadZone({ onSuccess }: UploadZoneProps) {
   const router = useRouter()
-  const [dragging, setDragging] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [rollName, setRollName] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -19,34 +17,13 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const handleDragLeave = (e: DragEvent) => {
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setDragging(false)
-    }
-  }
-
-  const handleDrop = (e: DragEvent) => {
-    e.preventDefault()
-    setDragging(false)
-    const dropped = e.dataTransfer.files[0]
-    if (dropped?.name.endsWith('.zip')) {
-      setFile(dropped)
-      setError('')
-      if (!rollName) {
-        setRollName(dropped.name.replace(/\.zip$/i, '').replace(/[-_]/g, ' '))
-      }
-    } else {
-      setError('Please drop a .zip file')
-    }
-  }
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
-    if (f) {
-      setFile(f)
-      if (!rollName) {
-        setRollName(f.name.replace(/\.zip$/i, '').replace(/[-_]/g, ' '))
-      }
+    if (!f) return
+    setError('')
+    setFile(f)
+    if (!rollName) {
+      setRollName(f.name.replace(/\.zip$/i, '').replace(/[-_]/g, ' '))
     }
   }
 
@@ -72,7 +49,6 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
       }
     } catch (err) {
       const raw = err instanceof Error ? err.message : 'Upload failed'
-      // A "Failed to fetch" usually means the server process crashed (e.g. out of memory).
       const message =
         raw === 'Failed to fetch'
           ? 'Upload failed — the server did not respond. The file may be too large for the available memory.'
@@ -86,29 +62,16 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
 
   return (
     <div className="space-y-4">
-      {/* Drop zone */}
-      <div
-        onDragOver={e => { e.preventDefault(); setDragging(true) }}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={() => !file && inputRef.current?.click()}
-        className={cn(
-          'relative border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer',
-          dragging
-            ? 'border-accent bg-accent/5'
-            : file
-            ? 'border-border bg-muted/50 cursor-default'
-            : 'border-border hover:border-accent/50 hover:bg-muted/50'
-        )}
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".zip"
-          className="hidden"
-          onChange={handleFileChange}
-        />
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".zip"
+        className="hidden"
+        onChange={handleFileChange}
+      />
 
+      {/* File display / picker */}
+      <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
         {file ? (
           <div className="flex flex-col items-center gap-2">
             <FileArchive className="h-10 w-10 text-accent" />
@@ -117,7 +80,7 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
               {(file.size / 1024 / 1024).toFixed(1)} MB
             </p>
             <button
-              onClick={e => { e.stopPropagation(); setFile(null); setRollName('') }}
+              onClick={() => { setFile(null); setRollName(''); setError('') }}
               className="text-xs text-muted-foreground hover:text-destructive transition-colors mt-1"
             >
               Remove
@@ -127,10 +90,17 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
           <div className="flex flex-col items-center gap-3">
             <UploadCloud className="h-10 w-10 text-muted-foreground" />
             <div>
-              <p className="text-sm font-medium text-foreground">Drop your lab .zip here</p>
-              <p className="text-xs text-muted-foreground mt-0.5">or click to browse</p>
+              <p className="text-sm font-medium text-foreground">Select your lab .zip file</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Supports JPG, TIFF, PNG, HEIC inside a .zip
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground/70">Supports JPG, TIFF, PNG, HEIC inside a .zip</p>
+            <button
+              onClick={() => inputRef.current?.click()}
+              className="px-4 py-2 rounded-md bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/90 transition-colors"
+            >
+              Browse Files
+            </button>
           </div>
         )}
       </div>

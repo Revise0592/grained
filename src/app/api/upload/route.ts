@@ -5,7 +5,6 @@ import path from 'path'
 import fs from 'fs/promises'
 import { createWriteStream } from 'fs'
 import { tmpdir } from 'os'
-import { Readable } from 'stream'
 import sharp from 'sharp'
 import { prisma } from '@/lib/db'
 import { isImageFile, getUploadDir } from '@/lib/utils'
@@ -41,6 +40,10 @@ function streamUploadToDisk(request: NextRequest): Promise<ParsedUpload> {
       return
     }
 
+    // Guard against the promise being settled more than once
+    let settled = false
+    const done = (fn: () => void) => { if (!settled) { settled = true; fn() } }
+
     const bb = busboy({ headers: { 'content-type': contentType } })
     const tmpPath = path.join(
       tmpdir(),
@@ -58,7 +61,7 @@ function streamUploadToDisk(request: NextRequest): Promise<ParsedUpload> {
       const { filename } = info
       if (!filename?.toLowerCase().endsWith('.zip')) {
         stream.resume()
-        reject(new UploadError('Please upload a .zip file'))
+        done(() => reject(new UploadError('Please upload a .zip file')))
         return
       }
 
@@ -80,19 +83,36 @@ function streamUploadToDisk(request: NextRequest): Promise<ParsedUpload> {
       try {
         if (fileWritePromise) await fileWritePromise
         if (!fileName) {
-          reject(new UploadError('No file provided'))
+          done(() => reject(new UploadError('No file provided')))
           return
         }
-        resolve({ tmpPath, rollName, fileName })
+        done(() => resolve({ tmpPath, rollName, fileName }))
       } catch (err) {
-        reject(err)
+        done(() => reject(err))
       }
     })
 
-    bb.on('error', reject)
+    bb.on('error', (err) => done(() => reject(err)))
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    Readable.fromWeb(request.body as any).pipe(bb)
+    // Pump the WHATWG ReadableStream into busboy chunk-by-chunk.
+    // Using getReader() directly avoids Readable.fromWeb() backpressure issues
+    // with large bodies, and ensures each chunk is a proper Buffer before busboy
+    // sees it (busboy requires Buffer, not plain Uint8Array).
+    const reader = request.body.getReader()
+    ;(async () => {
+      try {
+        for (;;) {
+          const { done: eof, value } = await reader.read()
+          if (eof) { bb.end(); break }
+          const buf = Buffer.from(value.buffer, value.byteOffset, value.byteLength)
+          const ok = bb.write(buf)
+          if (!ok) await new Promise<void>(res => bb.once('drain', res))
+        }
+      } catch (err) {
+        reader.cancel()
+        bb.destroy(err instanceof Error ? err : new Error(String(err)))
+      }
+    })()
   })
 }
 
