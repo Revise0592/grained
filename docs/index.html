@@ -480,7 +480,7 @@
       padding: 6rem 2.5rem;
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 6rem;
+      gap: 4rem;
       align-items: start;
     }
 
@@ -497,15 +497,17 @@
       font-size: 0.92rem;
       color: var(--text-dim);
       line-height: 1.8;
-      margin-bottom: 2rem;
+      margin-bottom: 1.25rem;
     }
 
     .env-table {
       width: 100%;
       border-collapse: collapse;
       font-size: 0.8rem;
-      margin-top: 2rem;
+      margin-top: 1.5rem;
     }
+
+    .env-table tbody tr:hover td { background: var(--warm-faint); }
 
     .env-table th {
       font-family: 'DM Mono', monospace;
@@ -853,6 +855,15 @@
 <span class="kw">docker compose up</span> -d<br />
 <br />
 <span class="cm"># Open http://localhost:3000</span>
+        </div>
+
+        <p style="margin-top: 1.5rem; font-size: 0.8rem; color: var(--text-dim); line-height: 1.7;">
+          All data — photos and database — lives in the <span style="font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--accent);">grained_data</span> named volume. Updating Grained is a pull and restart; your archive is never affected.
+        </p>
+
+        <div style="margin-top: 1.75rem; display: flex; gap: 1rem;">
+          <a href="https://github.com/Revise0592/grained" class="btn-primary" target="_blank" rel="noopener">GitHub ↗</a>
+          <a href="https://github.com/Revise0592/grained/issues" class="btn-secondary" target="_blank" rel="noopener">Report an issue ↗</a>
         </div>
       </div>
     </div>
