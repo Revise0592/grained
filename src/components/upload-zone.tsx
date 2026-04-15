@@ -19,12 +19,19 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
+  const handleDragLeave = (e: DragEvent) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setDragging(false)
+    }
+  }
+
   const handleDrop = (e: DragEvent) => {
     e.preventDefault()
     setDragging(false)
     const dropped = e.dataTransfer.files[0]
     if (dropped?.name.endsWith('.zip')) {
       setFile(dropped)
+      setError('')
       if (!rollName) {
         setRollName(dropped.name.replace(/\.zip$/i, '').replace(/[-_]/g, ' '))
       }
@@ -64,7 +71,13 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
         router.push(`/rolls/${data.rollId}`)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed')
+      const raw = err instanceof Error ? err.message : 'Upload failed'
+      // A "Failed to fetch" usually means the server process crashed (e.g. out of memory).
+      const message =
+        raw === 'Failed to fetch'
+          ? 'Upload failed — the server did not respond. The file may be too large for the available memory.'
+          : raw
+      setError(message)
       setProgress('')
     } finally {
       setUploading(false)
@@ -76,7 +89,7 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
       {/* Drop zone */}
       <div
         onDragOver={e => { e.preventDefault(); setDragging(true) }}
-        onDragLeave={() => setDragging(false)}
+        onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => !file && inputRef.current?.click()}
         className={cn(
