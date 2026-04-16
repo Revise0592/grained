@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import AdmZip from 'adm-zip'
 import busboy from 'busboy'
 import path from 'path'
 import fs from 'fs/promises'
 import { createWriteStream } from 'fs'
 import { tmpdir } from 'os'
-import sharp from 'sharp'
-import { prisma } from '@/lib/db'
-import { isImageFile, getUploadDir } from '@/lib/utils'
-import { generateUniqueSlug } from '@/lib/server-utils'
+import { randomBytes } from 'crypto'
 
-export const maxDuration = 300
 export const dynamic = 'force-dynamic'
 
 class UploadError extends Error {
@@ -19,52 +14,32 @@ class UploadError extends Error {
   }
 }
 
-interface ParsedUpload {
-  tmpPath: string
-  rollName: string
-  fileName: string
-}
-
-/** Stream the multipart body to a temp file on disk via busboy.
- *  Avoids loading the entire zip into memory during the upload phase. */
-function streamUploadToDisk(request: NextRequest): Promise<ParsedUpload> {
+/** Stream the multipart body to a temp file on disk.
+ *  No size limit — busboy pipes directly to disk, nothing is buffered in memory. */
+async function streamToDisk(
+  request: NextRequest,
+  tmpPath: string,
+  contentType: string,
+): Promise<{ rollName: string; fileName: string }> {
   return new Promise((resolve, reject) => {
-    const contentType = request.headers.get('content-type') ?? ''
-    if (!contentType.includes('multipart/form-data')) {
-      reject(new UploadError('Expected multipart/form-data'))
-      return
-    }
-
-    if (!request.body) {
-      reject(new UploadError('No request body'))
-      return
-    }
-
-    // Guard against the promise being settled more than once
     let settled = false
-    const done = (fn: () => void) => { if (!settled) { settled = true; fn() } }
+    const done = (fn: () => void) => {
+      if (!settled) { settled = true; fn() }
+    }
 
     const bb = busboy({ headers: { 'content-type': contentType } })
-    const tmpPath = path.join(
-      tmpdir(),
-      `grained-${Date.now()}-${Math.random().toString(36).slice(2)}.zip`
-    )
     let rollName = ''
     let fileName = ''
     let fileWritePromise: Promise<void> | null = null
 
     bb.on('file', (field, stream, info) => {
-      if (field !== 'file') {
-        stream.resume()
-        return
-      }
+      if (field !== 'file') { stream.resume(); return }
       const { filename } = info
       if (!filename?.toLowerCase().endsWith('.zip')) {
         stream.resume()
         done(() => reject(new UploadError('Please upload a .zip file')))
         return
       }
-
       fileName = filename
       const ws = createWriteStream(tmpPath)
       fileWritePromise = new Promise<void>((res, rej) => {
@@ -86,7 +61,7 @@ function streamUploadToDisk(request: NextRequest): Promise<ParsedUpload> {
           done(() => reject(new UploadError('No file provided')))
           return
         }
-        done(() => resolve({ tmpPath, rollName, fileName }))
+        done(() => resolve({ rollName, fileName }))
       } catch (err) {
         done(() => reject(err))
       }
@@ -94,11 +69,7 @@ function streamUploadToDisk(request: NextRequest): Promise<ParsedUpload> {
 
     bb.on('error', (err) => done(() => reject(err)))
 
-    // Pump the WHATWG ReadableStream into busboy chunk-by-chunk.
-    // Using getReader() directly avoids Readable.fromWeb() backpressure issues
-    // with large bodies, and ensures each chunk is a proper Buffer before busboy
-    // sees it (busboy requires Buffer, not plain Uint8Array).
-    const reader = request.body.getReader()
+    const reader = request.body!.getReader()
     ;(async () => {
       try {
         for (;;) {
@@ -117,110 +88,29 @@ function streamUploadToDisk(request: NextRequest): Promise<ParsedUpload> {
 }
 
 export async function POST(request: NextRequest) {
-  let tmpPath: string | null = null
+  const contentType = request.headers.get('content-type') ?? ''
+  if (!contentType.includes('multipart/form-data')) {
+    return NextResponse.json({ error: 'Expected multipart/form-data' }, { status: 400 })
+  }
+  if (!request.body) {
+    return NextResponse.json({ error: 'No request body' }, { status: 400 })
+  }
+
+  const jobId = randomBytes(16).toString('hex')
+  const tmpZip = path.join(tmpdir(), `grained-${jobId}.zip`)
+  const metaFile = path.join(tmpdir(), `grained-${jobId}.json`)
 
   try {
-    const parsed = await streamUploadToDisk(request)
-    tmpPath = parsed.tmpPath
+    const { rollName, fileName } = await streamToDisk(request, tmpZip, contentType)
 
-    let zip: AdmZip
-    try {
-      zip = new AdmZip(tmpPath)
-    } catch {
-      throw new UploadError('Could not read zip file — the file may be corrupt or not a valid zip')
-    }
+    // Write job metadata so the processing endpoint can find it
+    await fs.writeFile(metaFile, JSON.stringify({ tmpZip, rollName, fileName }))
 
-    const entries = zip.getEntries()
-    const imageEntries = entries
-      .filter(e => {
-        const name = path.basename(e.entryName)
-        return !name.startsWith('.') && !name.startsWith('__') && isImageFile(name)
-      })
-      .sort((a, b) => a.entryName.localeCompare(b.entryName))
-
-    if (imageEntries.length === 0) {
-      throw new UploadError(
-        `No image files found in zip (${entries.length} total entries). ` +
-        `Supported formats: JPG, TIFF, PNG, HEIC.`
-      )
-    }
-
-    const name =
-      parsed.rollName ||
-      parsed.fileName.replace(/\.zip$/i, '').replace(/[-_]/g, ' ')
-    const slug = await generateUniqueSlug(name)
-    const roll = await prisma.roll.create({ data: { name, slug } })
-
-    const uploadDir = getUploadDir()
-    const rollDir = path.join(uploadDir, roll.id)
-    const thumbDir = path.join(rollDir, 'thumbs')
-    await fs.mkdir(rollDir, { recursive: true })
-    await fs.mkdir(thumbDir, { recursive: true })
-
-    const photoData: {
-      rollId: string
-      filename: string
-      originalName: string
-      path: string
-      width: number | null
-      height: number | null
-      order: number
-    }[] = []
-
-    for (let i = 0; i < imageEntries.length; i++) {
-      const entry = imageEntries[i]
-      const originalName = path.basename(entry.entryName)
-      const ext = path.extname(originalName).toLowerCase()
-      const filename = `${String(i + 1).padStart(4, '0')}${ext}`
-      const imgBuffer = entry.getData()
-
-      await fs.writeFile(path.join(rollDir, filename), imgBuffer)
-
-      let width: number | null = null
-      let height: number | null = null
-
-      try {
-        // .rotate() auto-rotates based on EXIF orientation and strips EXIF,
-        // so thumbnails and the browser-rendered full image agree on orientation.
-        const rotated = sharp(imgBuffer).rotate()
-        const meta = await rotated.clone().metadata()
-        width = meta.width ?? null
-        height = meta.height ?? null
-
-        await rotated
-          .clone()
-          .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
-          .jpeg({ quality: 82 })
-          .toFile(path.join(thumbDir, `${path.basename(filename, ext)}.jpg`))
-      } catch {
-        // If sharp can't process (e.g., TIFF variant), continue without thumb
-      }
-
-      photoData.push({
-        rollId: roll.id,
-        filename,
-        originalName,
-        path: `${roll.id}/${filename}`,
-        width,
-        height,
-        order: i,
-      })
-    }
-
-    await prisma.photo.createMany({ data: photoData })
-
-    return NextResponse.json(
-      { rollId: roll.id, photoCount: photoData.length },
-      { status: 201 }
-    )
+    return NextResponse.json({ jobId })
   } catch (err) {
-    console.error('Upload error:', err)
+    await fs.unlink(tmpZip).catch(() => {})
     const message = err instanceof Error ? err.message : 'Upload failed'
     const status = err instanceof UploadError ? err.status : 500
     return NextResponse.json({ error: message }, { status })
-  } finally {
-    if (tmpPath) {
-      await fs.unlink(tmpPath).catch(() => {})
-    }
   }
 }
