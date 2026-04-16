@@ -59,6 +59,15 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
       setProgress({ stage: 'error', message: 'Please select a .zip file' })
       return
     }
+    // On Linux (Flatpak/Snap browsers, some drag sources) the File object can
+    // arrive with size 0 even when the file is valid — catch it early.
+    if (f.size === 0) {
+      setProgress({
+        stage: 'error',
+        message: 'Could not read the dropped file. Try dragging from your file manager, or use Browse Files.',
+      })
+      return
+    }
     setFile(f)
     setProgress({ stage: 'idle' })
     if (!rollNameRef.current) {
@@ -74,6 +83,30 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
+
+    // Prefer DataTransferItem.webkitGetAsEntry() — it resolves the real File
+    // object with correct size even on Linux where getAsFile() may return size 0.
+    const item = e.dataTransfer.items?.[0]
+    if (item?.kind === 'file') {
+      const entry = item.webkitGetAsEntry()
+      if (entry?.isFile) {
+        ;(entry as FileSystemFileEntry).file(
+          (f) => selectFile(f),
+          () => {
+            // Entry API failed — fall back to getAsFile()
+            const f = item.getAsFile()
+            if (f) selectFile(f)
+          },
+        )
+        return
+      }
+      // No entry API — try getAsFile() directly
+      const f = item.getAsFile()
+      if (f) selectFile(f)
+      return
+    }
+
+    // Last resort: legacy files collection
     const f = e.dataTransfer.files?.[0]
     if (f) selectFile(f)
   }
