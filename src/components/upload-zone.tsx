@@ -11,16 +11,26 @@ interface UploadZoneProps {
 type ProgressState =
   | { stage: 'idle' }
   | { stage: 'uploading'; loaded: number; total: number }
+  | { stage: 'assembling' }
   | { stage: 'extracting'; message: string }
   | { stage: 'processing'; current: number; total: number; name: string }
   | { stage: 'done'; rollId: string; count: number }
   | { stage: 'error'; message: string }
 
+/** 10 MB per chunk — small enough to avoid any server-side body limits */
+const CHUNK_SIZE = 10 * 1024 * 1024
+
+function generateJobId(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
 function ProgressBar({ percent }: { percent: number }) {
   return (
     <div className="h-1.5 bg-muted rounded-full overflow-hidden">
       <div
-        className="h-full bg-accent transition-all duration-300 ease-out rounded-full"
+        className="h-full bg-accent transition-all duration-200 ease-out rounded-full"
         style={{ width: `${Math.max(2, Math.min(100, percent))}%` }}
       />
     </div>
@@ -39,6 +49,7 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
 
   const busy =
     progress.stage === 'uploading' ||
+    progress.stage === 'assembling' ||
     progress.stage === 'extracting' ||
     progress.stage === 'processing' ||
     progress.stage === 'done'
@@ -77,45 +88,86 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
   const upload = async () => {
     if (!file || busy) return
 
+    const jobId = generateJobId()
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+    let bytesConfirmed = 0
+
     try {
-      // ── Phase 1: Upload via XHR so we get byte-level upload progress ────────
-      const jobId = await new Promise<string>((resolve, reject) => {
-        const xhr = new XMLHttpRequest()
-        xhr.open('POST', '/api/upload')
+      // ── Phase 1: Upload file in 10 MB chunks ─────────────────────────────────
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE
+        const end = Math.min(start + CHUNK_SIZE, file.size)
+        const chunk = file.slice(start, end)
+        const chunkSize = end - start
 
-        xhr.upload.onprogress = (e) => {
-          setProgress({ stage: 'uploading', loaded: e.loaded, total: e.total })
-        }
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest()
+          xhr.open('POST', '/api/upload/chunk')
+          xhr.setRequestHeader('Content-Type', 'application/octet-stream')
+          xhr.setRequestHeader('X-Job-Id', jobId)
+          xhr.setRequestHeader('X-Chunk-Index', String(i))
+          xhr.setRequestHeader('X-Total-Chunks', String(totalChunks))
+          xhr.setRequestHeader('X-File-Name', file.name)
+          xhr.setRequestHeader('X-Roll-Name', encodeURIComponent(rollName || file.name.replace(/\.zip$/i, '')))
 
-        xhr.onload = () => {
-          try {
-            const data = JSON.parse(xhr.responseText) as { jobId?: string; error?: string }
-            if (xhr.status < 300 && data.jobId) {
-              resolve(data.jobId)
-            } else {
-              reject(new Error(data.error ?? `Server error ${xhr.status}`))
-            }
-          } catch {
-            reject(new Error('Unexpected response from server'))
+          xhr.upload.onprogress = (e) => {
+            setProgress({
+              stage: 'uploading',
+              loaded: bytesConfirmed + e.loaded,
+              total: file.size,
+            })
           }
-        }
 
-        xhr.onerror = () => reject(new Error('Upload failed — check your network connection'))
-        xhr.ontimeout = () => reject(new Error('Upload timed out'))
+          xhr.onload = () => {
+            try {
+              const data = JSON.parse(xhr.responseText) as { ok?: boolean; error?: string }
+              if (xhr.status < 300 && data.ok) {
+                bytesConfirmed += chunkSize
+                setProgress({ stage: 'uploading', loaded: bytesConfirmed, total: file.size })
+                resolve()
+              } else {
+                reject(new Error(data.error ?? `Server error on chunk ${i}`))
+              }
+            } catch {
+              reject(new Error(`Unexpected response on chunk ${i}`))
+            }
+          }
 
-        const form = new FormData()
-        form.append('file', file)
-        form.append('name', rollName || file.name.replace(/\.zip$/i, ''))
-        xhr.send(form)
+          xhr.onerror = () => reject(new Error(`Network error on chunk ${i} — check your connection`))
+          xhr.ontimeout = () => reject(new Error(`Timeout on chunk ${i}`))
+
+          xhr.send(chunk)
+        })
+      }
+
+      // ── Phase 2: Assemble chunks into final ZIP ───────────────────────────────
+      setProgress({ stage: 'assembling' })
+
+      const assembleRes = await fetch('/api/upload/assemble', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId,
+          totalChunks,
+          fileName: file.name,
+          rollName: rollName || file.name.replace(/\.zip$/i, ''),
+        }),
       })
+      if (!assembleRes.ok) {
+        const data = (await assembleRes.json()) as { error?: string }
+        throw new Error(data.error ?? 'Assembly failed')
+      }
+      const assembleData = (await assembleRes.json()) as { jobId?: string; error?: string }
+      if (!assembleData.jobId) {
+        throw new Error('Assembly response missing jobId')
+      }
 
-      // ── Phase 2: Stream processing progress via Server-Sent Events ──────────
-      setProgress({ stage: 'extracting', message: 'Connecting to server…' })
+      // ── Phase 3: Stream processing progress via SSE ───────────────────────────
+      setProgress({ stage: 'extracting', message: 'Opening zip file…' })
 
-      const response = await fetch(`/api/upload/${jobId}/process`, {
+      const response = await fetch(`/api/upload/${assembleData.jobId}/process`, {
         headers: { Accept: 'text/event-stream' },
       })
-
       if (!response.ok || !response.body) {
         throw new Error('Failed to start processing stream')
       }
@@ -176,18 +228,11 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
         }
       }
     } catch (err) {
-      const raw = err instanceof Error ? err.message : 'Upload failed'
-      setProgress({ stage: 'error', message: raw })
+      setProgress({ stage: 'error', message: err instanceof Error ? err.message : 'Upload failed' })
     }
   }
 
   // Derived display values
-  const uploadedMB =
-    progress.stage === 'uploading' ? (progress.loaded / 1024 / 1024).toFixed(1) : null
-  const totalMB =
-    progress.stage === 'uploading' && progress.total > 0
-      ? (progress.total / 1024 / 1024).toFixed(1)
-      : null
   const uploadPct =
     progress.stage === 'uploading' && progress.total > 0
       ? Math.round((progress.loaded / progress.total) * 100)
@@ -207,7 +252,7 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
         onChange={handleFileChange}
       />
 
-      {/* ── Drop zone (shown when no file selected and not actively processing) ── */}
+      {/* ── Drop zone ────────────────────────────────────────────────────────────── */}
       {!file && !busy && (
         <div
           onDrop={handleDrop}
@@ -227,7 +272,7 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
                 {dragOver ? 'Drop it here' : 'Drag & drop or click to select'}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Supports JPG, TIFF, PNG, HEIC inside a .zip
+                Supports JPG, TIFF, PNG, HEIC inside a .zip — no size limit
               </p>
             </div>
             <button
@@ -285,26 +330,27 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
           <div className="flex items-center justify-between text-sm">
             <span className="font-medium text-foreground">Uploading…</span>
             <span className="text-muted-foreground tabular-nums">
-              {uploadPct !== null ? `${uploadPct}%` : `${uploadedMB} MB`}
+              {uploadPct !== null ? `${uploadPct}%` : '—'}
             </span>
           </div>
-          {uploadPct !== null ? (
-            <ProgressBar percent={uploadPct} />
-          ) : (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              <span className="text-xs">Sending data…</span>
-            </div>
-          )}
-          {totalMB && uploadedMB && (
+          <ProgressBar percent={uploadPct ?? 0} />
+          {progress.total > 0 && (
             <p className="text-xs text-muted-foreground tabular-nums">
-              {uploadedMB} / {totalMB} MB
+              {(progress.loaded / 1024 / 1024).toFixed(1)} / {(progress.total / 1024 / 1024).toFixed(1)} MB
             </p>
           )}
         </div>
       )}
 
-      {/* ── Extracting / opening zip ─────────────────────────────────────────────── */}
+      {/* ── Assembling chunks ────────────────────────────────────────────────────── */}
+      {progress.stage === 'assembling' && (
+        <div className="flex items-center gap-2.5 py-1 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+          <span>Assembling file on server…</span>
+        </div>
+      )}
+
+      {/* ── Extracting / opening ZIP ─────────────────────────────────────────────── */}
       {progress.stage === 'extracting' && (
         <div className="flex items-center gap-2.5 py-1 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin shrink-0" />
