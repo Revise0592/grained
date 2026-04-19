@@ -84,14 +84,16 @@ export function RollForm({ initial, rollId, initialTags }: RollFormProps) {
     setForm(f => ({ ...f, [key]: e.target.value }))
   }
 
-  // Film stock dropdown: saved custom stocks first, then presets
+  // Film stock dropdown: saved stocks always shown, presets only when typing
   const filteredSavedStocks = savedFilmStocks.filter(s =>
     s.name.toLowerCase().includes(filmQuery.toLowerCase())
   )
   const savedStockNames = new Set(savedFilmStocks.map(s => s.name.toLowerCase()))
-  const filteredPresets = FILM_STOCKS.filter(s =>
-    s.name.toLowerCase().includes(filmQuery.toLowerCase()) && !savedStockNames.has(s.name.toLowerCase())
-  )
+  const filteredPresets = filmQuery.trim()
+    ? FILM_STOCKS.filter(s =>
+        s.name.toLowerCase().includes(filmQuery.toLowerCase()) && !savedStockNames.has(s.name.toLowerCase())
+      )
+    : []
   const filmDropdownItems = [
     ...filteredSavedStocks.map(s => ({ name: s.name, iso: s.iso, saved: true })),
     ...filteredPresets.map(s => ({ name: s.name, iso: s.iso, saved: false })),
