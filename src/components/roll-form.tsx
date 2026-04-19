@@ -13,7 +13,8 @@ interface RollFormProps {
   initialTags?: string[]
 }
 
-const CAMERAS_HINT = ['Nikon F3', 'Canon AE-1', 'Leica M6', 'Contax T2', 'Olympus OM-1', 'Pentax K1000', 'Mamiya RB67', 'Hasselblad 500C']
+interface SavedCamera { id: string; name: string }
+interface SavedFilmStock { id: string; name: string; iso: number | null }
 
 export function RollForm({ initial, rollId, initialTags }: RollFormProps) {
   const router = useRouter()
@@ -21,6 +22,8 @@ export function RollForm({ initial, rollId, initialTags }: RollFormProps) {
   const [error, setError] = useState('')
   const [filmQuery, setFilmQuery] = useState(initial?.filmStock ?? '')
   const [showFilmDropdown, setShowFilmDropdown] = useState(false)
+  const [cameraQuery, setCameraQuery] = useState(initial?.camera ?? '')
+  const [showCameraDropdown, setShowCameraDropdown] = useState(false)
 
   // Tags state
   const [tags, setTags] = useState<string[]>(initialTags ?? [])
@@ -28,10 +31,22 @@ export function RollForm({ initial, rollId, initialTags }: RollFormProps) {
   const [allTags, setAllTags] = useState<string[]>([])
   const [showTagSuggestions, setShowTagSuggestions] = useState(false)
 
+  // Saved cameras and film stocks
+  const [savedCameras, setSavedCameras] = useState<SavedCamera[]>([])
+  const [savedFilmStocks, setSavedFilmStocks] = useState<SavedFilmStock[]>([])
+
   useEffect(() => {
     fetch('/api/tags')
       .then(r => r.json())
       .then((data: { name: string }[]) => setAllTags(data.map(t => t.name)))
+      .catch(() => {})
+    fetch('/api/saved/cameras')
+      .then(r => r.json())
+      .then(setSavedCameras)
+      .catch(() => {})
+    fetch('/api/saved/film-stocks')
+      .then(r => r.json())
+      .then(setSavedFilmStocks)
       .catch(() => {})
   }, [])
 
@@ -69,14 +84,34 @@ export function RollForm({ initial, rollId, initialTags }: RollFormProps) {
     setForm(f => ({ ...f, [key]: e.target.value }))
   }
 
-  const filteredStocks = filmQuery
-    ? FILM_STOCKS.filter(s => s.name.toLowerCase().includes(filmQuery.toLowerCase())).slice(0, 8)
-    : FILM_STOCKS.slice(0, 8)
+  // Film stock dropdown: saved custom stocks first, then presets
+  const filteredSavedStocks = savedFilmStocks.filter(s =>
+    s.name.toLowerCase().includes(filmQuery.toLowerCase())
+  )
+  const savedStockNames = new Set(savedFilmStocks.map(s => s.name.toLowerCase()))
+  const filteredPresets = FILM_STOCKS.filter(s =>
+    s.name.toLowerCase().includes(filmQuery.toLowerCase()) && !savedStockNames.has(s.name.toLowerCase())
+  )
+  const filmDropdownItems = [
+    ...filteredSavedStocks.map(s => ({ name: s.name, iso: s.iso, saved: true })),
+    ...filteredPresets.map(s => ({ name: s.name, iso: s.iso, saved: false })),
+  ].slice(0, 10)
 
-  const selectFilmStock = (name: string, iso: number) => {
+  const selectFilmStock = (name: string, iso: number | null) => {
     setFilmQuery(name)
-    setForm(f => ({ ...f, filmStock: name, iso: iso.toString() }))
+    setForm(f => ({ ...f, filmStock: name, iso: iso?.toString() ?? f.iso }))
     setShowFilmDropdown(false)
+  }
+
+  // Camera dropdown: saved cameras
+  const filteredCameras = savedCameras.filter(c =>
+    c.name.toLowerCase().includes(cameraQuery.toLowerCase())
+  )
+
+  const selectCamera = (name: string) => {
+    setCameraQuery(name)
+    setForm(f => ({ ...f, camera: name }))
+    setShowCameraDropdown(false)
   }
 
   const submit = async (e: React.FormEvent) => {
@@ -207,17 +242,20 @@ export function RollForm({ initial, rollId, initialTags }: RollFormProps) {
                 placeholder="Search or type film name…"
                 className={inputClass}
               />
-              {showFilmDropdown && filteredStocks.length > 0 && (
+              {showFilmDropdown && filmDropdownItems.length > 0 && (
                 <div className="absolute z-10 top-full mt-1 w-full bg-card border border-border rounded-md shadow-lg max-h-48 overflow-y-auto">
-                  {filteredStocks.map(s => (
+                  {filmDropdownItems.map(s => (
                     <button
                       key={s.name}
                       type="button"
-                      onMouseDown={() => selectFilmStock(s.name, s.iso)}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex justify-between items-center"
+                      onMouseDown={() => selectFilmStock(s.name, s.iso ?? null)}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex justify-between items-center gap-2"
                     >
                       <span>{s.name}</span>
-                      <span className="text-xs text-muted-foreground">ISO {s.iso}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {s.iso ? `ISO ${s.iso}` : ''}
+                        {s.saved && <span className="ml-1.5 text-accent/70">★</span>}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -253,17 +291,35 @@ export function RollForm({ initial, rollId, initialTags }: RollFormProps) {
       <Section title="Camera">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Camera">
-            <input
-              type="text"
-              value={form.camera}
-              onChange={set('camera')}
-              list="cameras-hint"
-              placeholder="e.g. Nikon F3, Contax T2"
-              className={inputClass}
-            />
-            <datalist id="cameras-hint">
-              {CAMERAS_HINT.map(c => <option key={c} value={c} />)}
-            </datalist>
+            <div className="relative">
+              <input
+                type="text"
+                value={cameraQuery}
+                onChange={e => {
+                  setCameraQuery(e.target.value)
+                  setForm(f => ({ ...f, camera: e.target.value }))
+                  setShowCameraDropdown(true)
+                }}
+                onFocus={() => setShowCameraDropdown(true)}
+                onBlur={() => setTimeout(() => setShowCameraDropdown(false), 150)}
+                placeholder="e.g. Nikon F3, Contax T2"
+                className={inputClass}
+              />
+              {showCameraDropdown && filteredCameras.length > 0 && (
+                <div className="absolute z-10 top-full mt-1 w-full bg-card border border-border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                  {filteredCameras.map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onMouseDown={() => selectCamera(c.name)}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </Field>
           <Field label="Lens">
             <input

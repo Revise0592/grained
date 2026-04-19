@@ -47,5 +47,10 @@ export async function POST(request: NextRequest) {
     },
   })
 
+  await Promise.all([
+    camera ? prisma.savedCamera.upsert({ where: { name: camera }, update: {}, create: { name: camera } }) : null,
+    filmStock ? prisma.savedFilmStock.upsert({ where: { name: filmStock }, update: {}, create: { name: filmStock, iso: iso ? Number(iso) : null } }) : null,
+  ])
+
   return NextResponse.json(roll, { status: 201 })
 }

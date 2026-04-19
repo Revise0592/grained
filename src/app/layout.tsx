@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Nav } from '@/components/nav'
+import { StatsBar } from '@/components/stats-bar'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="min-h-screen flex flex-col">
             <Nav authEnabled={authEnabled} />
             <main className="flex-1">{children}</main>
+            <StatsBar />
           </div>
         </ThemeProvider>
       </body>

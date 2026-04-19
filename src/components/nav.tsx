@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Plus, Film, LogOut } from 'lucide-react'
+import { Plus, Film, LogOut, BookOpen } from 'lucide-react'
 import { ThemeToggle } from './theme-toggle'
 
 export function Nav({ authEnabled }: { authEnabled?: boolean }) {
@@ -28,6 +28,17 @@ export function Nav({ authEnabled }: { authEnabled?: boolean }) {
 {/* Actions */}
         <div className="flex items-center gap-1">
           <ThemeToggle />
+          <Link
+            href="/library"
+            title="Library"
+            className={`p-2 rounded-md transition-colors ${
+              pathname === '/library'
+                ? 'text-foreground bg-muted'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+            }`}
+          >
+            <BookOpen className="h-4 w-4" />
+          </Link>
           <Link
             href="/rolls/new"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/90 transition-colors"

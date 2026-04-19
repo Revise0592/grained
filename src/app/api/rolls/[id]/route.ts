@@ -76,6 +76,15 @@ export async function PUT(
     },
   })
 
+  const savedCamera = roll.camera
+  const savedFilm = roll.filmStock
+  const savedIso = roll.iso
+
+  await Promise.all([
+    savedCamera ? prisma.savedCamera.upsert({ where: { name: savedCamera }, update: {}, create: { name: savedCamera } }) : null,
+    savedFilm ? prisma.savedFilmStock.upsert({ where: { name: savedFilm }, update: {}, create: { name: savedFilm, iso: savedIso ?? null } }) : null,
+  ])
+
   return NextResponse.json(roll)
 }
 

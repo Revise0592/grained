@@ -91,3 +91,16 @@ model PhotoComment {
   body      String
   createdAt DateTime @default(now())
 }
+
+model SavedCamera {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+}
+
+model SavedFilmStock {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  iso       Int?
+  createdAt DateTime @default(now())
+}
