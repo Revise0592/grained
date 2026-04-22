@@ -14,6 +14,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // API key auth for API clients — set API_KEY env var to enable
+  const apiKey = process.env.API_KEY
+  if (apiKey) {
+    const authHeader = request.headers.get('authorization')
+    if (authHeader === `Bearer ${apiKey}`) {
+      return NextResponse.next()
+    }
+  }
+
   const token = request.cookies.get(SESSION_COOKIE)?.value
   if (!token) {
     return NextResponse.redirect(new URL('/login', request.url))
