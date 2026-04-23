@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
-const svg = readFileSync(join(root, 'public', 'icon.svg'))
+const svg = readFileSync(join(root, 'public', 'icons', 'icon-framed.svg'))
 
 await mkdir(join(root, 'public', 'icons'), { recursive: true })
 

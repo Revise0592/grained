@@ -21,8 +21,11 @@ export const metadata: Metadata = {
     title: 'Grained',
   },
   icons: {
+    icon: [
+      { url: '/icons/icon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.png', type: 'image/png', sizes: '32x32' },
+    ],
     apple: '/icons/apple-touch-icon.png',
-    icon: '/favicon.png',
   },
 }
 

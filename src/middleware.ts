@@ -9,8 +9,8 @@ export async function middleware(request: NextRequest) {
   const secret = process.env.SESSION_SECRET
   if (!password || !secret) return NextResponse.next()
 
-  // Always allow login page and auth API
-  if (pathname.startsWith('/login') || pathname.startsWith('/api/auth/')) {
+  // Always allow login page, auth API, and public stats
+  if (pathname.startsWith('/login') || pathname.startsWith('/api/auth/') || pathname === '/api/stats') {
     return NextResponse.next()
   }
 

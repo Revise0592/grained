@@ -9,8 +9,8 @@ export function StatsBar() {
 
   useEffect(() => {
     fetch('/api/stats')
-      .then(r => r.json())
-      .then(setStats)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => data && setStats(data))
       .catch(() => {})
   }, [])
 
