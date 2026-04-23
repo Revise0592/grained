@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 
 export function StatsBar() {
+  const pathname = usePathname()
   const [stats, setStats] = useState<{ rolls: number; photos: number } | null>(null)
 
   useEffect(() => {
@@ -11,6 +13,8 @@ export function StatsBar() {
       .then(setStats)
       .catch(() => {})
   }, [])
+
+  if (pathname === '/login') return null
 
   if (!stats) return null
 
