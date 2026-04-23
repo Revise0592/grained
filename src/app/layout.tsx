@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Nav } from '@/components/nav'
@@ -6,9 +6,24 @@ import { StatsBar } from '@/components/stats-bar'
 
 export const dynamic = 'force-dynamic'
 
+export const viewport: Viewport = {
+  themeColor: '#161513',
+  width: 'device-width',
+  initialScale: 1,
+}
+
 export const metadata: Metadata = {
   title: 'Grained',
   description: 'Film photography archive',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Grained',
+  },
+  icons: {
+    apple: '/icons/apple-touch-icon.png',
+    icon: '/favicon.png',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

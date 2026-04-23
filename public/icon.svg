@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" fill="#161513"/>
+  <!-- Film body -->
+  <rect x="64" y="160" width="384" height="192" rx="12" fill="#2a1a08"/>
+  <rect x="64" y="160" width="384" height="192" rx="12" fill="none" stroke="#d4670a" stroke-width="16"/>
+  <!-- Sprocket holes top -->
+  <rect x="108" y="124" width="40" height="40" rx="8" fill="#d4670a"/>
+  <rect x="236" y="124" width="40" height="40" rx="8" fill="#d4670a"/>
+  <rect x="364" y="124" width="40" height="40" rx="8" fill="#d4670a"/>
+  <!-- Sprocket holes bottom -->
+  <rect x="108" y="348" width="40" height="40" rx="8" fill="#d4670a"/>
+  <rect x="236" y="348" width="40" height="40" rx="8" fill="#d4670a"/>
+  <rect x="364" y="348" width="40" height="40" rx="8" fill="#d4670a"/>
+  <!-- Lens -->
+  <circle cx="256" cy="256" r="68" fill="none" stroke="#d4670a" stroke-width="16"/>
+  <circle cx="256" cy="256" r="30" fill="#d4670a"/>
+</svg>
