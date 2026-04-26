@@ -4,8 +4,10 @@ import { SESSION_COOKIE, COOKIE_MAX_AGE, createSessionToken, resolveSecret } fro
 export async function POST(request: NextRequest) {
   const { password } = await request.json()
 
-  const correctPassword = process.env.AUTH_PASSWORD
-  const secret = await resolveSecret(process.env.SESSION_SECRET, correctPassword)
+  // Bracket notation ensures these are read from the runtime env (not inlined at build time).
+  // Trim removes any accidental whitespace from the Unraid template value.
+  const correctPassword = process.env['AUTH_PASSWORD']?.trim() || undefined
+  const secret = await resolveSecret(process.env['SESSION_SECRET'], correctPassword)
 
   if (!correctPassword || !secret) {
     return NextResponse.json({ error: 'Auth not configured' }, { status: 500 })

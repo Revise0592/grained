@@ -30,7 +30,7 @@ export const metadata: Metadata = {
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const authEnabled = !!process.env.AUTH_PASSWORD
+  const authEnabled = !!process.env['AUTH_PASSWORD']
 
   return (
     <html lang="en" suppressHydrationWarning>

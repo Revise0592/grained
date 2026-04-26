@@ -4,9 +4,11 @@ import { SESSION_COOKIE, verifySessionToken, resolveSecret } from './lib/auth'
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // If no password is configured, auth is disabled
-  const password = process.env.AUTH_PASSWORD
-  const secret = await resolveSecret(process.env.SESSION_SECRET, password)
+  // If no password is configured, auth is disabled.
+  // Bracket notation prevents SWC/webpack from inlining these at build time,
+  // ensuring they are always read from the runtime environment (e.g. Docker env vars set by Unraid).
+  const password = process.env['AUTH_PASSWORD']
+  const secret = await resolveSecret(process.env['SESSION_SECRET'], password)
   if (!password || !secret) return NextResponse.next()
 
   // Always allow login page, auth API, and public stats
@@ -15,7 +17,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // API key auth for API clients — set API_KEY env var to enable
-  const apiKey = process.env.API_KEY
+  const apiKey = process.env['API_KEY']
   if (apiKey) {
     const authHeader = request.headers.get('authorization')
     if (authHeader === `Bearer ${apiKey}`) {
