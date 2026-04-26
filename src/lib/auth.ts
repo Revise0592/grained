@@ -13,6 +13,16 @@ async function hmacKey(secret: string): Promise<CryptoKey> {
   )
 }
 
+export async function resolveSecret(secret: string | undefined, password: string | undefined): Promise<string | undefined> {
+  if (secret) return secret
+  if (!password) return undefined
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('grained-session:' + password))
+  const bytes = new Uint8Array(hash)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+  return btoa(binary)
+}
+
 export async function createSessionToken(secret: string): Promise<string> {
   const key = await hmacKey(secret)
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(PAYLOAD))

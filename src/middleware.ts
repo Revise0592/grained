@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { SESSION_COOKIE, verifySessionToken } from './lib/auth'
+import { SESSION_COOKIE, verifySessionToken, resolveSecret } from './lib/auth'
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // If no password is configured, auth is disabled
   const password = process.env.AUTH_PASSWORD
-  const secret = process.env.SESSION_SECRET
+  const secret = await resolveSecret(process.env.SESSION_SECRET, password)
   if (!password || !secret) return NextResponse.next()
 
   // Always allow login page, auth API, and public stats

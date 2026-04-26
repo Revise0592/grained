@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { SESSION_COOKIE, COOKIE_MAX_AGE, createSessionToken } from '@/lib/auth'
+import { SESSION_COOKIE, COOKIE_MAX_AGE, createSessionToken, resolveSecret } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   const { password } = await request.json()
 
   const correctPassword = process.env.AUTH_PASSWORD
-  const secret = process.env.SESSION_SECRET
+  const secret = await resolveSecret(process.env.SESSION_SECRET, correctPassword)
 
   if (!correctPassword || !secret) {
     return NextResponse.json({ error: 'Auth not configured' }, { status: 500 })
