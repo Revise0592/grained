@@ -38,6 +38,7 @@ model Roll {
   notes        String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
 
   photos   Photo[]
   comments RollComment[]
@@ -103,4 +104,13 @@ model SavedFilmStock {
   name      String   @unique
   iso       Int?
   createdAt DateTime @default(now())
+}
+
+
+model AppSettings {
+  id                       String   @id @default("default")
+  softDeleteRetentionDays  Int      @default(30)
+  backupReminderEnabled    Boolean  @default(true)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 }

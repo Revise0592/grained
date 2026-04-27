@@ -4,6 +4,7 @@ import { generateUniqueSlug } from '@/lib/server-utils'
 
 export async function GET() {
   const rolls = await prisma.roll.findMany({
+    where: { deletedAt: null },
     orderBy: { createdAt: 'desc' },
     include: {
       _count: { select: { photos: true, comments: true } },

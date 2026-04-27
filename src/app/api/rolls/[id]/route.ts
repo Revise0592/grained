@@ -3,14 +3,16 @@ import { prisma } from '@/lib/db'
 import { slugify, getUploadDir } from '@/lib/utils'
 import fs from 'fs/promises'
 import path from 'path'
+import { getAppSettings } from '@/lib/settings'
+import { purgeExpiredDeletedRolls } from '@/lib/soft-delete'
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const roll = await prisma.roll.findUnique({
-    where: { id },
+  const roll = await prisma.roll.findFirst({
+    where: { id, deletedAt: null },
     include: {
       photos: { orderBy: { order: 'asc' } },
       comments: { orderBy: { createdAt: 'asc' } },
@@ -30,7 +32,7 @@ export async function PUT(
   const { name, description, filmStock, filmFormat, iso, pushPull, camera, lens,
     dateShotStart, dateShotEnd, lab, dateDeveloped, developProcess, notes, coverPhotoId, tags } = body
 
-  const existing = await prisma.roll.findUnique({ where: { id } })
+  const existing = await prisma.roll.findFirst({ where: { id, deletedAt: null } })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   let slug = existing.slug
@@ -93,17 +95,26 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const roll = await prisma.roll.findUnique({ where: { id } })
+  const roll = await prisma.roll.findFirst({ where: { id, deletedAt: null } })
   if (!roll) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  await prisma.roll.delete({ where: { id } })
+  const settings = await getAppSettings()
 
-  const dir = path.join(getUploadDir(), id)
-  try {
-    await fs.rm(dir, { recursive: true, force: true })
-  } catch {
-    // Directory may not exist
+  if (settings.softDeleteRetentionDays === 0) {
+    await prisma.roll.delete({ where: { id } })
+
+    const dir = path.join(getUploadDir(), id)
+    try {
+      await fs.rm(dir, { recursive: true, force: true })
+    } catch {
+      // Directory may not exist
+    }
+
+    return new NextResponse(null, { status: 204 })
   }
+
+  await prisma.roll.update({ where: { id }, data: { deletedAt: new Date() } })
+  await purgeExpiredDeletedRolls()
 
   return new NextResponse(null, { status: 204 })
 }

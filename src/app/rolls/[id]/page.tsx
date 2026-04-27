@@ -6,14 +6,14 @@ export const dynamic = 'force-dynamic'
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const roll = await prisma.roll.findUnique({ where: { id }, select: { name: true } })
+  const roll = await prisma.roll.findFirst({ where: { id, deletedAt: null }, select: { name: true } })
   return { title: roll ? `${roll.name} — Grained` : 'Roll — Grained' }
 }
 
 export default async function RollPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const roll = await prisma.roll.findUnique({
-    where: { id },
+  const roll = await prisma.roll.findFirst({
+    where: { id, deletedAt: null },
     include: {
       photos: { orderBy: { order: 'asc' } },
       comments: { orderBy: { createdAt: 'asc' } },

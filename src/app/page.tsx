@@ -15,7 +15,10 @@ export default async function Home({
 
   const [rolls, allTags] = await Promise.all([
     prisma.roll.findMany({
-      where: tag ? { tags: { some: { name: tag } } } : undefined,
+      where: {
+      deletedAt: null,
+      ...(tag ? { tags: { some: { name: tag } } } : {}),
+    },
       orderBy: { createdAt: 'desc' },
       include: {
         _count: { select: { photos: true, comments: true } },

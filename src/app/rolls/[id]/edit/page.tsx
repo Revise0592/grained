@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function EditRollPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const roll = await prisma.roll.findUnique({ where: { id }, include: { tags: true } })
+  const roll = await prisma.roll.findFirst({ where: { id, deletedAt: null }, include: { tags: true } })
   if (!roll) notFound()
 
   return (

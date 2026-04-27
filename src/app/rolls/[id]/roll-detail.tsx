@@ -59,7 +59,7 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
   }
 
   const deleteRoll = async () => {
-    if (!confirm(`Delete "${roll.name}" and all its photos? This cannot be undone.`)) return
+    if (!confirm(`Move "${roll.name}" to deleted rolls? It will be permanently purged after your retention window.`)) return
     setDeleting(true)
     await fetch(`/api/rolls/${roll.id}`, { method: 'DELETE' })
     router.push('/')
