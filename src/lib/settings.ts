@@ -308,7 +308,7 @@ export function parseAppSettingsPayload(payload: unknown): { data?: AppSettingsS
         duplicateHandling: normalizeEnum(importDefaults.duplicateHandling, DUPLICATE_HANDLING_POLICIES),
         autoCreateRollFromZip: normalizeBoolean(importDefaults.autoCreateRollFromZip),
         inferShotDatesFromExif: normalizeBoolean(importDefaults.inferShotDatesFromExif),
-        defaultTimeZone: normalizeNullableText(importDefaults.defaultTimeZone),
+        defaultTimeZone: normalizeNullableText(importDefaults.defaultTimeZone) ?? undefined,
         preserveOriginalFilenames: normalizeBoolean(importDefaults.preserveOriginalFilenames),
       },
       displayPreferences: {
