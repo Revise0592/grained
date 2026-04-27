@@ -17,7 +17,7 @@ type ProgressState =
   | { stage: 'done'; rollId: string; count: number }
   | { stage: 'error'; message: string }
 
-/** 10 MB per chunk — small enough to avoid any server-side body limits */
+/** 10 MB per chunk — fallback path when single-request upload is rejected by infra limits. */
 const CHUNK_SIZE = 10 * 1024 * 1024
 
 function generateJobId(): string {
@@ -121,84 +121,144 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
   const upload = async () => {
     if (!file || busy) return
 
-    const jobId = generateJobId()
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
-    let bytesConfirmed = 0
-
     try {
-      // ── Phase 1: Upload file in 10 MB chunks ─────────────────────────────────
-      for (let i = 0; i < totalChunks; i++) {
-        const start = i * CHUNK_SIZE
-        const end = Math.min(start + CHUNK_SIZE, file.size)
-        const chunk = file.slice(start, end)
-        const chunkSize = end - start
+      const singleRequestUpload = () =>
+        new Promise<string>((resolve, reject) => {
+          const form = new FormData()
+          form.append('file', file)
+          form.append('name', rollName || file.name.replace(/\.zip$/i, ''))
 
-        await new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest()
-          xhr.open('POST', '/api/upload/chunk')
-          xhr.setRequestHeader('Content-Type', 'application/octet-stream')
-          xhr.setRequestHeader('X-Job-Id', jobId)
-          xhr.setRequestHeader('X-Chunk-Index', String(i))
-          xhr.setRequestHeader('X-Total-Chunks', String(totalChunks))
-          xhr.setRequestHeader('X-File-Name', file.name)
-          xhr.setRequestHeader('X-Roll-Name', encodeURIComponent(rollName || file.name.replace(/\.zip$/i, '')))
+          xhr.open('POST', '/api/upload')
 
           xhr.upload.onprogress = (e) => {
             setProgress({
               stage: 'uploading',
-              loaded: bytesConfirmed + e.loaded,
-              total: file.size,
+              loaded: e.loaded,
+              total: e.total || file.size,
             })
           }
 
           xhr.onload = () => {
             try {
-              const data = JSON.parse(xhr.responseText) as { ok?: boolean; error?: string }
-              if (xhr.status < 300 && data.ok) {
-                bytesConfirmed += chunkSize
-                setProgress({ stage: 'uploading', loaded: bytesConfirmed, total: file.size })
-                resolve()
-              } else {
-                reject(new Error(data.error ?? `Server error on chunk ${i}`))
+              const data = JSON.parse(xhr.responseText) as { jobId?: string; error?: string }
+              if (xhr.status < 300 && data.jobId) {
+                setProgress({ stage: 'uploading', loaded: file.size, total: file.size })
+                resolve(data.jobId)
+                return
               }
+              reject(new Error(data.error ?? `Upload failed (${xhr.status})`))
             } catch {
-              reject(new Error(`Unexpected response on chunk ${i}`))
+              reject(new Error('Unexpected upload response'))
             }
           }
 
-          xhr.onerror = () => reject(new Error(`Network error on chunk ${i} — check your connection`))
-          xhr.ontimeout = () => reject(new Error(`Timeout on chunk ${i}`))
+          xhr.onerror = () => reject(new Error('Network error during upload — check your connection'))
+          xhr.ontimeout = () => reject(new Error('Upload timed out'))
 
-          xhr.send(chunk)
+          xhr.send(form)
         })
+
+      const shouldFallbackToChunkUpload = (err: unknown) => {
+        if (!(err instanceof Error)) return false
+        const msg = err.message.toLowerCase()
+        return (
+          msg.includes('(413') ||
+          msg.includes('payload too large') ||
+          msg.includes('request entity too large') ||
+          msg.includes('body too large') ||
+          msg.includes('502') ||
+          msg.includes('504')
+        )
       }
 
-      // ── Phase 2: Assemble chunks into final ZIP ───────────────────────────────
-      setProgress({ stage: 'assembling' })
+      const chunkedUploadFallback = async () => {
+        const jobId = generateJobId()
+        const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+        let bytesConfirmed = 0
 
-      const assembleRes = await fetch('/api/upload/assemble', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jobId,
-          totalChunks,
-          fileName: file.name,
-          rollName: rollName || file.name.replace(/\.zip$/i, ''),
-        }),
-      })
-      if (!assembleRes.ok) {
-        const data = (await assembleRes.json()) as { error?: string }
-        throw new Error(data.error ?? 'Assembly failed')
-      }
-      const assembleData = (await assembleRes.json()) as { jobId?: string; error?: string }
-      if (!assembleData.jobId) {
-        throw new Error('Assembly response missing jobId')
+        for (let i = 0; i < totalChunks; i++) {
+          const start = i * CHUNK_SIZE
+          const end = Math.min(start + CHUNK_SIZE, file.size)
+          const chunk = file.slice(start, end)
+          const chunkSize = end - start
+
+          await new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest()
+            xhr.open('POST', '/api/upload/chunk')
+            xhr.setRequestHeader('Content-Type', 'application/octet-stream')
+            xhr.setRequestHeader('X-Job-Id', jobId)
+            xhr.setRequestHeader('X-Chunk-Index', String(i))
+            xhr.setRequestHeader('X-Total-Chunks', String(totalChunks))
+            xhr.setRequestHeader('X-File-Name', file.name)
+            xhr.setRequestHeader('X-Roll-Name', encodeURIComponent(rollName || file.name.replace(/\.zip$/i, '')))
+
+            xhr.upload.onprogress = (e) => {
+              setProgress({
+                stage: 'uploading',
+                loaded: bytesConfirmed + e.loaded,
+                total: file.size,
+              })
+            }
+
+            xhr.onload = () => {
+              try {
+                const data = JSON.parse(xhr.responseText) as { ok?: boolean; error?: string }
+                if (xhr.status < 300 && data.ok) {
+                  bytesConfirmed += chunkSize
+                  setProgress({ stage: 'uploading', loaded: bytesConfirmed, total: file.size })
+                  resolve()
+                } else {
+                  reject(new Error(data.error ?? `Server error on chunk ${i}`))
+                }
+              } catch {
+                reject(new Error(`Unexpected response on chunk ${i}`))
+              }
+            }
+
+            xhr.onerror = () => reject(new Error(`Network error on chunk ${i} — check your connection`))
+            xhr.ontimeout = () => reject(new Error(`Timeout on chunk ${i}`))
+
+            xhr.send(chunk)
+          })
+        }
+
+        setProgress({ stage: 'assembling' })
+
+        const assembleRes = await fetch('/api/upload/assemble', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jobId,
+            totalChunks,
+            fileName: file.name,
+            rollName: rollName || file.name.replace(/\.zip$/i, ''),
+          }),
+        })
+        if (!assembleRes.ok) {
+          const data = (await assembleRes.json()) as { error?: string }
+          throw new Error(data.error ?? 'Assembly failed')
+        }
+        const assembleData = (await assembleRes.json()) as { jobId?: string }
+        if (!assembleData.jobId) {
+          throw new Error('Assembly response missing jobId')
+        }
+
+        return assembleData.jobId
       }
 
-      // ── Phase 3: Stream processing progress via SSE ───────────────────────────
+      let processJobId: string
+      try {
+        processJobId = await singleRequestUpload()
+      } catch (err) {
+        if (!shouldFallbackToChunkUpload(err)) throw err
+        processJobId = await chunkedUploadFallback()
+      }
+
+      // ── Phase 2: Stream processing progress via SSE ───────────────────────────
       setProgress({ stage: 'extracting', message: 'Opening zip file…' })
 
-      const response = await fetch(`/api/upload/${assembleData.jobId}/process`, {
+      const response = await fetch(`/api/upload/${processJobId}/process`, {
         headers: { Accept: 'text/event-stream' },
       })
       if (!response.ok || !response.body) {
