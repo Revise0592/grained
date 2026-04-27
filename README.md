@@ -1,37 +1,28 @@
 # Grained
 
-Self-hosted archive for film photography. Import lab scan zips, log metadata, browse in a lightbox, annotate frames.
+Grained is a self-hosted archive for lab-scanned film rolls. It gives you one place to keep your scans, notes, and roll details so you can reliably revisit work months or years later.
+
+Day to day, you can import scan ZIPs, organize rolls, browse frames in a lightbox, annotate images, and quickly find past rolls when you want to review or share.
 
 ---
 
 ## Features
 
-- **Zip import** — drop a lab scan zip, Grained extracts and thumbnails every frame
-- **Roll metadata** — film stock, format, ISO, push/pull, camera, lens, lab, process, dates
-- **Lightbox** — full-screen viewer with keyboard navigation, rotation, per-frame info panel
-- **Per-frame data** — shutter, aperture, EV comp, focal length, notes
-- **Comments** — per-roll and per-frame threads
-- **Cover photo** — pin any frame as the roll's catalog cover
-- **Bulk delete** — multi-select photos for deletion
-- **Dark / light theme**
-- **Single-user, self-hosted** — no accounts, no cloud, no telemetry
-
-## Stack
-
-| Layer | Tech |
-|---|---|
-| Framework | Next.js 15 (App Router, standalone output) |
-| Database | SQLite via Prisma 6 |
-| Image processing | Sharp (800 px thumbnails) |
-| Zip extraction | adm-zip |
-| Styling | Tailwind CSS v3 + next-themes |
-| Runtime | Node.js 24 |
+- **Fast roll import** — drop in a lab scan ZIP and Grained prepares your frames so they are ready to browse.
+- **Organized roll records** — keep film stock, format, ISO, camera, lens, lab details, and dates together with each roll.
+- **Comfortable frame browsing** — use the full-screen lightbox with keyboard navigation, rotation, and frame info at a glance.
+- **Per-frame notes and settings** — store exposure details and notes directly on each frame so context is never lost.
+- **Comments for context** — add roll-level and frame-level comments for editing notes, reminders, or collaboration.
+- **Flexible roll covers** — choose any frame as the cover image so your archive stays visually scannable.
+- **Bulk cleanup tools** — multi-select frames when you need to remove rejects quickly.
+- **Dark and light theme** — pick the viewing style that works best in your workspace.
+- **Private by default** — self-hosted, single-user workflow with no cloud dependency.
 
 ---
 
-## Getting started
+## Getting started (Docker)
 
-**Requirements:** Docker + docker-compose
+**Requirements:** Docker + Docker Compose
 
 ```bash
 git clone https://github.com/Revise0592/grained.git
@@ -39,18 +30,22 @@ cd grained
 cp .env.example .env
 ```
 
-Edit `.env` — defaults work for a basic local install:
+### Configure environment variables
 
-```env
-DATABASE_URL=file:/data/grained.db
-UPLOAD_DIR=/data/uploads
+Set these **minimum required variables** in `.env`:
 
-# Optional: enable password protection
-AUTH_PASSWORD=your-password-here
-SESSION_SECRET=a-long-random-string  # generate: openssl rand -base64 32
-```
+- `DATABASE_URL`
+- `UPLOAD_DIR`
 
-Omit `AUTH_PASSWORD` / `SESSION_SECRET` to run without a login screen.
+Optional / advanced variables:
+
+- `AUTH_PASSWORD`
+- `SESSION_SECRET`
+- `API_KEY`
+- `UPLOAD_TEMP_TTL_MS`
+- `ENABLE_LEGACY_CHUNK_UPLOAD`
+
+Then start Grained:
 
 ```bash
 docker compose up -d
@@ -62,16 +57,25 @@ Open [http://localhost:3000](http://localhost:3000).
 
 | Variable | Default | Description |
 |---|---|---|
-| `DATABASE_URL` | `file:/data/grained.db` | SQLite path inside container |
-| `UPLOAD_DIR` | `/data/uploads` | Scan + thumbnail storage |
-| `AUTH_PASSWORD` | *(unset)* | Login screen password — omit to disable auth |
-| `SESSION_SECRET` | *(unset)* | Session signing secret — required when using auth |
+| `DATABASE_URL` | `file:/data/grained.db` | Location of your archive database. |
+| `UPLOAD_DIR` | `/data/uploads` | Folder where original scans and generated files are stored. |
+| `AUTH_PASSWORD` | *(unset)* | Enables password protection when set. |
+| `SESSION_SECRET` | *(unset)* | Secret used for login sessions (set when `AUTH_PASSWORD` is enabled). |
+| `API_KEY` | *(unset)* | Bearer token for API access via middleware protection. |
+| `UPLOAD_TEMP_TTL_MS` | `86400000` | How long temporary upload files are kept before cleanup (in milliseconds). |
+| `ENABLE_LEGACY_CHUNK_UPLOAD` | `false` | Compatibility mode for older chunked upload behavior. |
+
+#### Common deployment patterns
+
+- **Local default:** Set only `DATABASE_URL` and `UPLOAD_DIR` for a simple local archive.
+- **Password-protected:** Add `AUTH_PASSWORD` and `SESSION_SECRET` to require a login.
+- **API-enabled:** Add `API_KEY` when you want protected API access alongside the web app.
 
 ---
 
-## Data
+## Data persistence
 
-All data lives in a named Docker volume (`grained_data`), separate from application code — updates never touch your archive.
+Your archive lives in a named Docker volume (`grained_data`), separate from app files, so updates do not overwrite your scans or database.
 
 ```
 grained_data/
@@ -85,16 +89,16 @@ grained_data/
             └── 0002.jpg
 ```
 
-Migrations run automatically on startup via `prisma migrate deploy`.
+Database updates are applied automatically when the container starts.
 
 ---
 
 ## Importing a roll
 
-1. Get a zip of scans from your lab
-2. **New Roll** → drag zip onto the upload zone
-3. Name the roll → **Import Roll**
-4. Fill in metadata via **Edit**
+1. Download a ZIP of scans from your lab.
+2. Click **New Roll** and drag the ZIP into the upload area.
+3. Name the roll and click **Import Roll**.
+4. Open **Edit** to add roll details and notes.
 
 Supported formats: JPG, TIFF, PNG, HEIC, WebP.
 
