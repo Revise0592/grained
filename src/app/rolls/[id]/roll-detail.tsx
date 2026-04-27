@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, Pencil, Trash2, Camera, Star, ImageIcon, CheckSquare, X, Square, Tag, Plus } from 'lucide-react'
-import { cn, formatDate, imageUrl } from '@/lib/utils'
+import { cn, formatDate, imageUrl, thumbPath } from '@/lib/utils'
 import { Lightbox } from '@/components/lightbox'
 import { Comments } from '@/components/comments'
 import { UploadZone } from '@/components/upload-zone'
@@ -92,8 +92,7 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
   }
 
   const thumbUrl = (p: Photo) => {
-    const parts = p.path.split('/')
-    return `/api/images/${parts[0]}/thumbs/${parts.slice(1).join('/')}`
+    return `/api/images/${thumbPath(p.path)}`
   }
 
   return (

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import fs from 'fs/promises'
 import path from 'path'
-import { getUploadDir } from '@/lib/utils'
+import { getUploadDir, thumbPath as toThumbPath } from '@/lib/utils'
 
 export async function GET(
   _req: NextRequest,
@@ -53,9 +53,7 @@ export async function DELETE(
   const uploadDir = getUploadDir()
   try {
     await fs.unlink(path.join(uploadDir, photo.path))
-    const parts = photo.path.split('/')
-    const thumbPath = path.join(uploadDir, parts[0], 'thumbs', parts.slice(1).join('/'))
-    await fs.unlink(thumbPath)
+    await fs.unlink(path.join(uploadDir, toThumbPath(photo.path)))
   } catch {
     // Files may already be gone
   }
