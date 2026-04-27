@@ -54,6 +54,94 @@ export async function GET(
         }
       }
 
+      try {
+        // ── 1. Load job metadata ──────────────────────────────────────────────
+        let meta: { tmpZip: string; rollName: string; rollId?: string; fileName: string }
+        try {
+          meta = JSON.parse(await fs.readFile(metaFile, 'utf-8'))
+        } catch {
+          send({ stage: 'error', message: 'Upload session not found or expired. Please upload again.' })
+          controller.close()
+          return
+        }
+        tmpZip = meta.tmpZip
+        // Remove meta file immediately so it can't be replayed
+        await fs.unlink(metaFile).catch(() => {})
+
+        // ── 2. Open the ZIP ───────────────────────────────────────────────────
+        send({ stage: 'extracting', message: 'Opening zip file…' })
+
+        let zip: AdmZip
+        try {
+          zip = new AdmZip(meta.tmpZip)
+        } catch {
+          send({ stage: 'error', message: 'Could not read zip — the file may be corrupt or not a valid zip.' })
+          controller.close()
+          return
+        }
+
+        const allEntries = zip.getEntries()
+        const imageEntries = allEntries
+          .filter(e => {
+            const name = path.basename(e.entryName)
+            return !name.startsWith('.') && !name.startsWith('__') && isImageFile(name)
+          })
+          .sort((a, b) => a.entryName.localeCompare(b.entryName))
+
+        if (imageEntries.length === 0) {
+          send({
+            stage: 'error',
+            message:
+              `No image files found in zip (${allEntries.length} total entr${allEntries.length === 1 ? 'y' : 'ies'}). ` +
+              `Supported formats: JPG, TIFF, PNG, HEIC, WebP.`,
+          })
+          controller.close()
+          return
+        }
+
+        const total = imageEntries.length
+        const existingRollId = meta.rollId?.trim()
+        const roll = existingRollId
+          ? await prisma.roll.findUnique({ where: { id: existingRollId } })
+          : null
+
+        if (existingRollId && !roll) {
+          send({ stage: 'error', message: 'Target roll was not found. Refresh and try again.' })
+          controller.close()
+          return
+        }
+
+        if (roll) {
+          send({ stage: 'extracting', message: `Found ${total} image${total === 1 ? '' : 's'} — appending to roll…` })
+        } else {
+          send({ stage: 'extracting', message: `Found ${total} image${total === 1 ? '' : 's'} — creating roll…` })
+        }
+
+        // ── 3. Create roll or append to existing ──────────────────────────────
+        const targetRoll = roll ?? await (async () => {
+          const name =
+            meta.rollName ||
+            meta.fileName.replace(/\.zip$/i, '').replace(/[-_]/g, ' ')
+          const slug = await generateUniqueSlug(name)
+          return prisma.roll.create({ data: { name, slug } })
+        })()
+
+        const [orderAggregate, lastNumberedFilename] = await Promise.all([
+          prisma.photo.aggregate({
+            where: { rollId: targetRoll.id },
+            _max: { order: true },
+          }),
+          prisma.photo.findFirst({
+            where: { rollId: targetRoll.id },
+            orderBy: { filename: 'desc' },
+            select: { filename: true },
+          }),
+        ])
+        const nextOrderStart = (orderAggregate._max.order ?? -1) + 1
+        const nextFilenameStart = (() => {
+          const match = lastNumberedFilename?.filename.match(/^(\d+)\./)
+          return match ? Number.parseInt(match[1], 10) + 1 : 1
+        })()
       const persistPhotos = async (meta: UploadMeta, sourceImages: SourceImage[]) => {
         const total = sourceImages.length
         const name =
@@ -63,7 +151,7 @@ export async function GET(
         const roll = await prisma.roll.create({ data: { name, slug } })
 
         const uploadDir = getUploadDir()
-        const rollDir = path.join(uploadDir, roll.id)
+        const rollDir = path.join(uploadDir, targetRoll.id)
         const thumbDir = path.join(rollDir, 'thumbs')
         await fs.mkdir(rollDir, { recursive: true })
         await fs.mkdir(thumbDir, { recursive: true })
@@ -79,6 +167,10 @@ export async function GET(
         }[] = []
 
         for (let i = 0; i < total; i++) {
+          const entry = imageEntries[i]
+          const originalName = path.basename(entry.entryName)
+          const ext = path.extname(originalName).toLowerCase()
+          const filename = `${String(nextFilenameStart + i).padStart(4, '0')}${ext}`
           const image = sourceImages[i]
           const ext = path.extname(image.originalName).toLowerCase()
           const safeExt = ext || '.jpg'
@@ -108,13 +200,15 @@ export async function GET(
           }
 
           photoData.push({
-            rollId: roll.id,
+            rollId: targetRoll.id,
             filename,
+            originalName,
+            path: `${targetRoll.id}/${filename}`,
             originalName: image.originalName,
             path: `${roll.id}/${filename}`,
             width,
             height,
-            order: i,
+            order: nextOrderStart + i,
           })
         }
 
@@ -122,6 +216,8 @@ export async function GET(
         return { rollId: roll.id, count: photoData.length }
       }
 
+        send({ stage: 'done', rollId: targetRoll.id, count: photoData.length })
+        try { controller.close() } catch { /* already closed */ }
       try {
         let meta: UploadMeta
         try {
