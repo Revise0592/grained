@@ -44,61 +44,92 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
     progress.stage === 'processing' ||
     progress.stage === 'done'
 
-  const selectFile = (f: File) => {
+  const normalizeCandidateFile = (f: File): { file?: File; error?: string } => {
     if (!f.name.toLowerCase().endsWith('.zip')) {
-      setProgress({ stage: 'error', message: 'Please select a .zip file' })
-      return
+      return { error: 'Please select a .zip file' }
     }
     // On Linux (Flatpak/Snap browsers, some drag sources) the File object can
     // arrive with size 0 even when the file is valid — catch it early.
     if (f.size === 0) {
+      return {
+        error: 'Could not read the dropped file. Try dragging from your file manager, or use Browse Files.',
+      }
+    }
+    return { file: f }
+  }
+
+  const selectFromCandidates = (candidates: File[]) => {
+    const firstZip = candidates.find((candidate) => candidate.name.toLowerCase().endsWith('.zip'))
+    if (!firstZip) {
+      setProgress({ stage: 'error', message: 'Please select a .zip file' })
+      return
+    }
+
+    const checked = normalizeCandidateFile(firstZip)
+    if (!checked.file) {
+      setProgress({ stage: 'error', message: checked.error ?? 'Upload failed' })
+      return
+    }
+    selectFile(checked.file)
+  }
+
+  const selectFile = (f: File) => {
+    const checked = normalizeCandidateFile(f)
+    if (!checked.file) {
       setProgress({
         stage: 'error',
-        message: 'Could not read the dropped file. Try dragging from your file manager, or use Browse Files.',
+        message: checked.error ?? 'Upload failed',
       })
       return
     }
-    setFile(f)
+
+    setFile(checked.file)
     setProgress({ stage: 'idle' })
     if (!rollNameRef.current) {
-      setRollName(f.name.replace(/\.zip$/i, '').replace(/[-_]/g, ' '))
+      setRollName(checked.file.name.replace(/\.zip$/i, '').replace(/[-_]/g, ' '))
     }
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]
-    if (f) selectFile(f)
+    const files = Array.from(e.target.files ?? [])
+    if (files.length > 0) {
+      selectFromCandidates(files)
+    }
   }
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
 
-    // Prefer DataTransferItem.webkitGetAsEntry() — it resolves the real File
-    // object with correct size even on Linux where getAsFile() may return size 0.
-    const item = e.dataTransfer.items?.[0]
-    if (item?.kind === 'file') {
-      const entry = item.webkitGetAsEntry()
-      if (entry?.isFile) {
-        ;(entry as FileSystemFileEntry).file(
-          (f) => selectFile(f),
-          () => {
-            // Entry API failed — fall back to getAsFile()
-            const f = item.getAsFile()
-            if (f) selectFile(f)
-          },
-        )
-        return
-      }
-      // No entry API — try getAsFile() directly
-      const f = item.getAsFile()
-      if (f) selectFile(f)
+    const filesFromItems = await Promise.all(
+      Array.from(e.dataTransfer.items ?? [])
+        .filter((item) => item.kind === 'file')
+        .map((item) => new Promise<File | null>((resolve) => {
+          // Prefer DataTransferItem.webkitGetAsEntry() — it resolves the real File
+          // object with correct size even on Linux where getAsFile() may return size 0.
+          const entry = item.webkitGetAsEntry()
+          if (entry?.isFile) {
+            ;(entry as FileSystemFileEntry).file(
+              (f) => resolve(f),
+              () => resolve(item.getAsFile()),
+            )
+            return
+          }
+          resolve(item.getAsFile())
+        })),
+    )
+    const candidates = filesFromItems.filter((f): f is File => Boolean(f))
+
+    if (candidates.length > 0) {
+      selectFromCandidates(candidates)
       return
     }
 
     // Last resort: legacy files collection
-    const f = e.dataTransfer.files?.[0]
-    if (f) selectFile(f)
+    const fallbackFiles = Array.from(e.dataTransfer.files ?? [])
+    if (fallbackFiles.length > 0) {
+      selectFromCandidates(fallbackFiles)
+    }
   }
 
   const reset = () => {
