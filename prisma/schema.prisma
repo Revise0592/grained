@@ -104,3 +104,14 @@ model SavedFilmStock {
   iso       Int?
   createdAt DateTime @default(now())
 }
+
+
+model AppSettings {
+  id                 String   @id @default("singleton")
+  metadataDefaults   Json
+  importDefaults     Json
+  displayPreferences Json
+  libraryBehavior    Json
+  dataSafety         Json
+  updatedAt          DateTime @updatedAt
+}
