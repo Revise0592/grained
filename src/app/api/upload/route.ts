@@ -3,6 +3,7 @@ import busboy from 'busboy'
 import fs from 'fs/promises'
 import { createWriteStream } from 'fs'
 import { randomBytes } from 'crypto'
+import { Readable, Writable } from 'stream'
 import { isImageFile } from '@/lib/utils'
 import {
   createUploadTempImagePath,
@@ -69,6 +70,22 @@ async function streamToDisk(
     }
 
     const bb = busboy({ headers: { 'content-type': contentType } })
+    const openWriters = new Set<Writable>()
+    const abortController = new AbortController()
+    const abortError = new UploadError('Upload was interrupted before completion. Please try again.', 400)
+
+    const destroyWriters = () => {
+      for (const ws of openWriters) {
+        ws.destroy(abortError)
+      }
+      openWriters.clear()
+    }
+
+    const onAbort = () => {
+      destroyWriters()
+      bb.destroy(abortError)
+    }
+    request.signal.addEventListener('abort', onAbort, { once: true })
     let rollName = ''
     let rollId: string | undefined
     let zipName = ''
@@ -97,8 +114,12 @@ async function streamToDisk(
         zipCount += 1
         zipName = filename
         const ws = createWriteStream(tmpZip)
+        openWriters.add(ws)
         const writePromise = new Promise<void>((res, rej) => {
-          ws.on('finish', res)
+          ws.on('finish', () => {
+            openWriters.delete(ws)
+            res()
+          })
           ws.on('error', rej)
           stream.on('error', rej)
         })
@@ -126,9 +147,13 @@ async function streamToDisk(
       imageIndex += 1
       const tmpPath = createUploadTempImagePath(jobId, imageIndex, filename)
       const ws = createWriteStream(tmpPath)
+      openWriters.add(ws)
       let imageBytes = 0
       const writePromise = new Promise<void>((res, rej) => {
-        ws.on('finish', res)
+        ws.on('finish', () => {
+          openWriters.delete(ws)
+          res()
+        })
         ws.on('error', rej)
         stream.on('error', rej)
       })
@@ -189,26 +214,23 @@ async function streamToDisk(
       }
     })
 
-    bb.on('error', (err) => done(() => reject(err)))
+    bb.on('close', () => {
+      request.signal.removeEventListener('abort', onAbort)
+      abortController.abort()
+    })
+    bb.on('error', (err) => {
+      destroyWriters()
+      done(() => reject(err))
+    })
 
-    const reader = request.body!.getReader()
-    ;(async () => {
-      try {
-        for (;;) {
-          const { done: eof, value } = await reader.read()
-          if (eof) {
-            bb.end()
-            break
-          }
-          const buf = Buffer.from(value.buffer, value.byteOffset, value.byteLength)
-          const ok = bb.write(buf)
-          if (!ok) await new Promise<void>(res => bb.once('drain', res))
-        }
-      } catch (err) {
-        reader.cancel()
-        bb.destroy(err instanceof Error ? err : new Error(String(err)))
-      }
-    })()
+    const bodyStream = Readable.fromWeb(request.body as any, {
+      signal: abortController.signal,
+    })
+    bodyStream.on('error', (err) => {
+      destroyWriters()
+      bb.destroy(err instanceof Error ? err : new Error(String(err)))
+    })
+    bodyStream.pipe(bb)
   })
 }
 
@@ -266,9 +288,21 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     await removeTempArtifacts(tmpZip)
     await fs.unlink(metaFile).catch(() => {})
-    const message = err instanceof Error ? err.message : 'Upload failed'
+    const rawMessage = err instanceof Error ? err.message : 'Upload failed'
+    const isUnexpectedEnd = /unexpected end of form/i.test(rawMessage)
+    const message = isUnexpectedEnd
+      ? 'Upload was interrupted before completion. Please retry and keep this tab open until it finishes.'
+      : rawMessage
     const status = err instanceof UploadError ? err.status : 500
-    console.error('[upload] failed to ingest upload', JSON.stringify({ jobId, status, message }))
+    console.error('[upload] failed to ingest upload', JSON.stringify({
+      jobId,
+      status,
+      message,
+      rawMessage,
+      contentType,
+      contentLength: request.headers.get('content-length'),
+      aborted: request.signal.aborted,
+    }))
     return NextResponse.json({ error: message }, { status })
   }
 }
