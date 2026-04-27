@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { RollCard } from '@/components/roll-card'
 import { TagFilter } from '@/components/tag-filter'
 import { Film, Plus } from 'lucide-react'
+import { getLibraryBehaviorSettings } from '@/lib/settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,11 +13,28 @@ export default async function Home({
   searchParams: Promise<{ tag?: string }>
 }) {
   const { tag } = await searchParams
+  const settings = await getLibraryBehaviorSettings()
+
+  const rollWhere = {
+    ...(tag ? { tags: { some: { name: tag } } } : {}),
+    ...(settings.rollFilterPreset === 'cameraStockOnly'
+      ? {
+          AND: [
+            { camera: { not: null } },
+            { camera: { not: '' } },
+            { filmStock: { not: null } },
+            { filmStock: { not: '' } },
+          ],
+        }
+      : {}),
+  }
 
   const [rolls, allTags] = await Promise.all([
     prisma.roll.findMany({
-      where: tag ? { tags: { some: { name: tag } } } : undefined,
-      orderBy: { createdAt: 'desc' },
+      where: rollWhere,
+      orderBy: {
+        [settings.rollSortField]: settings.rollSortOrder,
+      },
       include: {
         _count: { select: { photos: true, comments: true } },
         photos: {

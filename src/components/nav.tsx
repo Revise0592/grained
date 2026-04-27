@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Plus, Film, LogOut, BookOpen } from 'lucide-react'
+import { Plus, Film, LogOut, BookOpen, Settings } from 'lucide-react'
 import { ThemeToggle } from './theme-toggle'
 
 export function Nav({ authEnabled }: { authEnabled?: boolean }) {
@@ -38,6 +38,18 @@ export function Nav({ authEnabled }: { authEnabled?: boolean }) {
             }`}
           >
             <BookOpen className="h-4 w-4" />
+          </Link>
+
+          <Link
+            href="/settings"
+            title="Settings"
+            className={`p-2 rounded-md transition-colors ${
+              pathname === '/settings'
+                ? 'text-foreground bg-muted'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+            }`}
+          >
+            <Settings className="h-4 w-4" />
           </Link>
           <Link
             href="/rolls/new"
