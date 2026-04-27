@@ -417,7 +417,7 @@
       line-height: 1.7;
     }
 
-    /* — STACK — */
+    /* — ARCHIVE VALUE — */
     .stack-section {
       max-width: 1200px;
       margin: 0 auto;
@@ -649,9 +649,9 @@
   <section class="hero">
     <div class="hero-text">
       <p class="hero-eyebrow">Self-hosted · Open source</p>
-      <h1 class="hero-title">Your rolls.<br /><em>Your archive.</em></h1>
+      <h1 class="hero-title">Import fast.<br /><em>Remember everything.</em></h1>
       <p class="hero-desc">
-        Grained is a self-hosted archive for film photographers. Import your lab scan zips, log roll metadata, browse a full-screen lightbox, and annotate individual frames — with no accounts, no cloud, no telemetry.
+        Grained helps you turn scan deliveries into a searchable archive: import a lab ZIP, enrich each roll with metadata, then browse and annotate frames for years. The workflow stays local and private — self-hosted, no cloud account, no telemetry.
       </p>
       <div class="hero-actions">
         <a href="#install" class="btn-primary">Get started →</a>
@@ -741,61 +741,51 @@
 
         <div class="step">
           <div class="step-num">03</div>
-          <h3 class="step-title">Fill metadata</h3>
-          <p class="step-desc">Fill in film stock, camera, lens, dates, develop process via the <em>Edit</em> panel.</p>
+          <h3 class="step-title">Enrich metadata</h3>
+          <p class="step-desc">Add film stock, camera, lens, dates, process notes, and per-frame settings in <em>Edit</em> so each roll keeps full context.</p>
         </div>
 
         <div class="step">
           <div class="step-num">04</div>
-          <h3 class="step-title">Browse forever</h3>
-          <p class="step-desc">Your archive, your way — entirely self-hosted.</p>
+          <h3 class="step-title">Browse and archive</h3>
+          <p class="step-desc">Review in the lightbox, leave notes, and keep every roll in your own long-term archive.</p>
         </div>
 
       </div>
     </div>
   </section>
 
-  <!-- STACK -->
+  <!-- ARCHIVE VALUE -->
   <section class="stack-section">
-    <p class="section-label">Stack</p>
+    <p class="section-label">Why Grained</p>
     <table class="stack-table">
       <thead>
         <tr>
-          <th>Layer</th>
-          <th>Technology</th>
-          <th>Notes</th>
+          <th>Workflow stage</th>
+          <th>What you do</th>
+          <th>What you keep</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td><span class="stack-layer">Framework</span></td>
-          <td><span class="stack-tech">Next.js 15</span></td>
-          <td><span class="stack-note">App Router, standalone output</span></td>
+          <td><span class="stack-layer">Import</span></td>
+          <td><span class="stack-tech">Drop in a lab scan ZIP and let Grained prepare frames automatically.</span></td>
+          <td><span class="stack-note">A clean start for each roll without manual file wrangling.</span></td>
         </tr>
         <tr>
-          <td><span class="stack-layer">Database</span></td>
-          <td><span class="stack-tech">SQLite via Prisma 6</span></td>
-          <td><span class="stack-note">Migrations run automatically on startup</span></td>
+          <td><span class="stack-layer">Enrich</span></td>
+          <td><span class="stack-tech">Capture roll metadata, frame notes, and shoot context as you review.</span></td>
+          <td><span class="stack-note">Searchable history with technical details intact.</span></td>
         </tr>
         <tr>
-          <td><span class="stack-layer">Images</span></td>
-          <td><span class="stack-tech">Sharp</span></td>
-          <td><span class="stack-note">Thumbnails at 800 px</span></td>
+          <td><span class="stack-layer">Browse</span></td>
+          <td><span class="stack-tech">Use the lightbox and roll views to revisit work quickly.</span></td>
+          <td><span class="stack-note">A personal archive that stays easy to navigate over time.</span></td>
         </tr>
         <tr>
-          <td><span class="stack-layer">Zip handling</span></td>
-          <td><span class="stack-tech">adm-zip</span></td>
-          <td><span class="stack-note">Extracts and sorts frames on import</span></td>
-        </tr>
-        <tr>
-          <td><span class="stack-layer">Styling</span></td>
-          <td><span class="stack-tech">Tailwind CSS v3</span></td>
-          <td><span class="stack-note">Dark / light via next-themes</span></td>
-        </tr>
-        <tr>
-          <td><span class="stack-layer">Runtime</span></td>
-          <td><span class="stack-tech">Node.js 24</span></td>
-          <td><span class="stack-note">Docker + Docker Compose</span></td>
+          <td><span class="stack-layer">Own it</span></td>
+          <td><span class="stack-tech">Run it in Docker on your own hardware or server.</span></td>
+          <td><span class="stack-note">No hosted account, no third-party cloud dependency, your data stays with you.</span></td>
         </tr>
       </tbody>
     </table>
@@ -806,8 +796,8 @@
     <div class="install-inner">
       <div class="install-text">
         <p class="section-label">Install</p>
-        <h2>Up in three<br /><em style="font-family:'Playfair Display',serif;font-style:italic;color:var(--warm);">commands.</em></h2>
-        <p>Grained runs entirely in Docker. No external services, no signup, no cloud dependency — just a container and a volume.</p>
+        <h2>Start with Docker,<br /><em style="font-family:'Playfair Display',serif;font-style:italic;color:var(--warm);">tune for your deployment.</em></h2>
+        <p>Grained runs in Docker with persistent local storage. Most setups are quick, but environment values can vary depending on auth, API access, and upload behavior.</p>
 
         <table class="env-table">
           <thead>
@@ -831,12 +821,27 @@
             <tr>
               <td><span class="env-key">AUTH_PASSWORD</span></td>
               <td><span class="env-default">unset</span></td>
-              <td><span class="env-note">Omit to disable login</span></td>
+              <td><span class="env-note">Optional: set for password-protected access; leave unset for open local use.</span></td>
             </tr>
             <tr>
               <td><span class="env-key">SESSION_SECRET</span></td>
               <td><span class="env-default">unset</span></td>
-              <td><span class="env-note">Required when using auth</span></td>
+              <td><span class="env-note">Optional but required with <span class="env-key">AUTH_PASSWORD</span>; used to sign login sessions.</span></td>
+            </tr>
+            <tr>
+              <td><span class="env-key">API_KEY</span></td>
+              <td><span class="env-default">unset</span></td>
+              <td><span class="env-note">Optional: bearer token for API clients and scripted integrations.</span></td>
+            </tr>
+            <tr>
+              <td><span class="env-key">UPLOAD_TEMP_TTL_MS</span></td>
+              <td><span class="env-default">86400000</span></td>
+              <td><span class="env-note">Optional tuning: how long temporary upload chunks are kept before cleanup (milliseconds).</span></td>
+            </tr>
+            <tr>
+              <td><span class="env-key">ENABLE_LEGACY_CHUNK_UPLOAD</span></td>
+              <td><span class="env-default">false</span></td>
+              <td><span class="env-note">Optional compatibility flag for older chunked upload clients.</span></td>
             </tr>
           </tbody>
         </table>
