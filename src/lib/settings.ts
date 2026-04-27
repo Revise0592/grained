@@ -62,6 +62,15 @@ export interface Preferences {
   defaultCommonTags: string[]
 }
 
+export interface RollCreationDefaultsInput {
+  lab?: string | null
+  developProcess?: string | null
+  filmFormat?: string | null
+  camera?: string | null
+  lens?: string | null
+  tags?: string[]
+}
+
 export type AppSettingsPatch = {
   metadataDefaults?: Partial<MetadataDefaults>
   importDefaults?: Partial<ImportDefaults>
@@ -355,6 +364,24 @@ export function preferencesFromAppSettings(settings: AppSettingsShape): Preferen
     defaultDevelopProcess: settings.metadataDefaults.defaultDevelopProcess,
     defaultFilmFormat: settings.metadataDefaults.defaultFilmFormat,
     defaultCommonTags: settings.metadataDefaults.defaultCommonTags,
+  }
+}
+
+export function applyMetadataDefaultsToRoll<T extends RollCreationDefaultsInput>(
+  input: T,
+  settings: AppSettingsShape,
+): T & RollCreationDefaultsInput {
+  const { metadataDefaults } = settings
+
+  return {
+    ...input,
+    lab: input.lab === undefined ? metadataDefaults.defaultLab : input.lab,
+    developProcess:
+      input.developProcess === undefined ? metadataDefaults.defaultDevelopProcess : input.developProcess,
+    filmFormat: input.filmFormat === undefined ? metadataDefaults.defaultFilmFormat : input.filmFormat,
+    camera: input.camera === undefined ? metadataDefaults.defaultCamera : input.camera,
+    lens: input.lens === undefined ? metadataDefaults.defaultLens : input.lens,
+    tags: input.tags === undefined ? metadataDefaults.defaultCommonTags : input.tags,
   }
 }
 

@@ -15,7 +15,12 @@ import {
   mergeImportSettings,
   parseImportSettings,
 } from '@/lib/import-settings'
-import { DEFAULT_APP_SETTINGS, mapDbAppSettings } from '@/lib/settings'
+import {
+  applyMetadataDefaultsToRoll,
+  type AppSettingsShape,
+  DEFAULT_APP_SETTINGS,
+  mapDbAppSettings,
+} from '@/lib/settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,6 +63,7 @@ async function persistPhotos(
   meta: UploadMeta,
   sourceImages: SourceImage[],
   settings: EffectiveImportSettings,
+  appSettings: AppSettingsShape,
   send: (data: object) => void,
 ) {
   const total = sourceImages.length
@@ -75,7 +81,36 @@ async function persistPhotos(
       meta.rollName ||
       meta.fileName.replace(/\.zip$/i, '').replace(/[-_]/g, ' ')
     const slug = await generateUniqueSlug(name)
-    return prisma.roll.create({ data: { name, slug } })
+    const metadataApplied = applyMetadataDefaultsToRoll({}, appSettings)
+    const created = await prisma.roll.create({
+      data: {
+        name,
+        slug,
+        lab: metadataApplied.lab,
+        developProcess: metadataApplied.developProcess,
+        filmFormat: metadataApplied.filmFormat,
+        camera: metadataApplied.camera,
+        lens: metadataApplied.lens,
+        ...(metadataApplied.tags?.length && {
+          tags: {
+            connectOrCreate: metadataApplied.tags.map((tagName: string) => ({
+              where: { name: tagName },
+              create: { name: tagName },
+            })),
+          },
+        }),
+      },
+    })
+
+    if (appSettings.libraryBehavior.saveCamerasAutomatically && created.camera) {
+      await prisma.savedCamera.upsert({
+        where: { name: created.camera },
+        update: {},
+        create: { name: created.camera },
+      })
+    }
+
+    return created
   })()
 
   const [orderAggregate, lastNumberedFilename, frameAggregate, existingByOriginalName] = await Promise.all([
@@ -342,9 +377,10 @@ export async function GET(
         }
 
         const savedSettings = await prisma.appSettings.findUnique({ where: { id: 'singleton' } })
-        const importDefaults = savedSettings
-          ? mapDbAppSettings(savedSettings).importDefaults
-          : DEFAULT_APP_SETTINGS.importDefaults
+        const appSettings: AppSettingsShape = savedSettings
+          ? mapDbAppSettings(savedSettings)
+          : DEFAULT_APP_SETTINGS
+        const importDefaults = appSettings.importDefaults
 
         const effectiveSettingsRaw = mergeImportSettings(
           {
@@ -360,7 +396,7 @@ export async function GET(
           duplicateHandling: effectiveSettingsRaw.duplicateHandling ?? importDefaults.duplicateHandling,
         }
 
-        const { rollId, count } = await persistPhotos(meta, sourceImages, effectiveSettings, send)
+        const { rollId, count } = await persistPhotos(meta, sourceImages, effectiveSettings, appSettings, send)
         send({ stage: 'done', rollId, count })
         try { controller.close() } catch { }
       } catch (err) {

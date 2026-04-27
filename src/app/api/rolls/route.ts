@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { generateUniqueSlug } from '@/lib/server-utils'
-import { DEFAULT_APP_SETTINGS, mapDbAppSettings } from '@/lib/settings'
+import { applyMetadataDefaultsToRoll, DEFAULT_APP_SETTINGS, mapDbAppSettings } from '@/lib/settings'
 
 export async function GET() {
   const rolls = await prisma.roll.findMany({
@@ -29,17 +29,31 @@ export async function POST(request: NextRequest) {
   }
 
   const slug = await generateUniqueSlug(name)
+  const appSettingsRecord = await prisma.appSettings.findUnique({ where: { id: 'singleton' } })
+  const appSettings = appSettingsRecord
+    ? mapDbAppSettings(appSettingsRecord)
+    : DEFAULT_APP_SETTINGS
+  const metadataApplied = applyMetadataDefaultsToRoll({
+    filmFormat,
+    camera,
+    lens,
+    lab,
+    developProcess,
+    tags: tags as string[] | undefined,
+  }, appSettings)
+
   const roll = await prisma.roll.create({
     data: {
-      name: name.trim(), slug, description, filmStock, filmFormat,
-      iso: iso ? Number(iso) : null, pushPull, camera, lens,
+      name: name.trim(), slug, description, filmStock,
+      filmFormat: metadataApplied.filmFormat,
+      iso: iso ? Number(iso) : null, pushPull, camera: metadataApplied.camera, lens: metadataApplied.lens,
       dateShotStart: dateShotStart ? new Date(dateShotStart) : null,
       dateShotEnd: dateShotEnd ? new Date(dateShotEnd) : null,
-      lab, dateDeveloped: dateDeveloped ? new Date(dateDeveloped) : null,
-      developProcess, notes,
-      ...(tags?.length && {
+      lab: metadataApplied.lab, dateDeveloped: dateDeveloped ? new Date(dateDeveloped) : null,
+      developProcess: metadataApplied.developProcess, notes,
+      ...(metadataApplied.tags?.length && {
         tags: {
-          connectOrCreate: (tags as string[]).map((tagName: string) => ({
+          connectOrCreate: metadataApplied.tags.map((tagName: string) => ({
             where: { name: tagName },
             create: { name: tagName },
           })),
@@ -48,17 +62,14 @@ export async function POST(request: NextRequest) {
     },
   })
 
-  const appSettings = await prisma.appSettings.findUnique({ where: { id: 'singleton' } })
-  const libraryBehavior = appSettings
-    ? mapDbAppSettings(appSettings).libraryBehavior
-    : DEFAULT_APP_SETTINGS.libraryBehavior
+  const libraryBehavior = appSettings.libraryBehavior
 
   await Promise.all([
-    libraryBehavior.saveCamerasAutomatically && camera
-      ? prisma.savedCamera.upsert({ where: { name: camera }, update: {}, create: { name: camera } })
+    libraryBehavior.saveCamerasAutomatically && roll.camera
+      ? prisma.savedCamera.upsert({ where: { name: roll.camera }, update: {}, create: { name: roll.camera } })
       : null,
-    libraryBehavior.saveFilmStocksAutomatically && filmStock
-      ? prisma.savedFilmStock.upsert({ where: { name: filmStock }, update: {}, create: { name: filmStock, iso: iso ? Number(iso) : null } })
+    libraryBehavior.saveFilmStocksAutomatically && roll.filmStock
+      ? prisma.savedFilmStock.upsert({ where: { name: roll.filmStock }, update: {}, create: { name: roll.filmStock, iso: roll.iso ?? null } })
       : null,
   ])
 

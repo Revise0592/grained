@@ -185,7 +185,7 @@ export default function SettingsPage() {
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
           <h1 className="text-xl font-semibold text-foreground">Settings</h1>
-          <p className="text-sm text-muted-foreground">Global defaults and behavior controls for your Grained workspace.</p>
+          <p className="text-sm text-muted-foreground">Only live settings are shown here. Everything on this page affects app behavior today.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -299,28 +299,6 @@ export default function SettingsPage() {
             {DUPLICATE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </Field>
-        <Field label="Time Zone">
-          <input
-            value={settings.importDefaults.defaultTimeZone}
-            onChange={e => update('importDefaults', { defaultTimeZone: e.target.value || 'UTC' })}
-            className={inputClass}
-          />
-        </Field>
-        <Toggle
-          label="Auto-create roll from ZIP"
-          checked={settings.importDefaults.autoCreateRollFromZip}
-          onChange={checked => update('importDefaults', { autoCreateRollFromZip: checked })}
-        />
-        <Toggle
-          label="Infer shot dates from EXIF"
-          checked={settings.importDefaults.inferShotDatesFromExif}
-          onChange={checked => update('importDefaults', { inferShotDatesFromExif: checked })}
-        />
-        <Toggle
-          label="Preserve original filenames"
-          checked={settings.importDefaults.preserveOriginalFilenames}
-          onChange={checked => update('importDefaults', { preserveOriginalFilenames: checked })}
-        />
       </Section>
 
       <Section title="Display Preferences">
@@ -368,16 +346,6 @@ export default function SettingsPage() {
           checked={settings.libraryBehavior.saveFilmStocksAutomatically}
           onChange={checked => update('libraryBehavior', { saveFilmStocksAutomatically: checked })}
         />
-        <Toggle
-          label="Allow duplicate camera entries"
-          checked={settings.libraryBehavior.allowDuplicateCameraEntries}
-          onChange={checked => update('libraryBehavior', { allowDuplicateCameraEntries: checked })}
-        />
-        <Toggle
-          label="Allow duplicate film stock entries"
-          checked={settings.libraryBehavior.allowDuplicateFilmStockEntries}
-          onChange={checked => update('libraryBehavior', { allowDuplicateFilmStockEntries: checked })}
-        />
       </Section>
 
       <Section title="Data Safety">
@@ -395,16 +363,6 @@ export default function SettingsPage() {
           label="Require delete confirmation"
           checked={settings.dataSafety.requireDeleteConfirmation}
           onChange={checked => update('dataSafety', { requireDeleteConfirmation: checked })}
-        />
-        <Toggle
-          label="Backup before bulk import"
-          checked={settings.dataSafety.autoBackupBeforeBulkImport}
-          onChange={checked => update('dataSafety', { autoBackupBeforeBulkImport: checked })}
-        />
-        <Toggle
-          label="Allow metadata overwrite on import"
-          checked={settings.dataSafety.allowMetadataOverwriteOnImport}
-          onChange={checked => update('dataSafety', { allowMetadataOverwriteOnImport: checked })}
         />
       </Section>
     </div>
