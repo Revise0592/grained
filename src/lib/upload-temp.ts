@@ -27,6 +27,18 @@ export function createUploadTempPaths(jobId: string) {
   }
 }
 
+export function createUploadTempImagePath(jobId: string, index: number, originalName: string) {
+  const tempDir = tmpdir()
+  const ext = path.extname(originalName).toLowerCase()
+  return path.join(tempDir, `${TEMP_PREFIX}${jobId}-img-${String(index).padStart(4, '0')}${ext}`)
+}
+
+function isUploadTempArtifact(name: string): boolean {
+  if (!name.startsWith(TEMP_PREFIX)) return false
+  if (name.endsWith('.zip') || name.endsWith('.json')) return true
+  return /-img-\d{4}\.[a-z0-9]+$/i.test(name)
+}
+
 export async function pruneStaleUploadTempArtifacts(now = Date.now()) {
   const dir = tmpdir()
   const ttlMs = getLifecycleTtlMs()
@@ -34,11 +46,8 @@ export async function pruneStaleUploadTempArtifacts(now = Date.now()) {
 
   const names = await fs.readdir(dir)
   const staleTargets = names.filter((name) => {
-    const isUploadTempFile =
-      name.startsWith(TEMP_PREFIX) &&
-      (name.endsWith('.zip') || name.endsWith('.json'))
     const isChunkDir = name.startsWith(CHUNK_PREFIX)
-    return isUploadTempFile || isChunkDir
+    return isUploadTempArtifact(name) || isChunkDir
   })
 
   const deleted: string[] = []
