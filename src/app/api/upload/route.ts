@@ -5,11 +5,19 @@ import { createWriteStream } from 'fs'
 import { randomBytes } from 'crypto'
 import { Readable, Writable } from 'stream'
 import { isImageFile } from '@/lib/utils'
+import { prisma } from '@/lib/db'
+import { DEFAULT_APP_SETTINGS, mapDbAppSettings } from '@/lib/settings'
 import {
   createUploadTempImagePath,
   createUploadTempPaths,
   pruneStaleUploadTempArtifacts,
 } from '@/lib/upload-temp'
+import {
+  ImportSettings,
+  ImportSettingsValidationError,
+  formatImportSettingsValidationError,
+  parseImportSettings,
+} from '@/lib/import-settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +33,7 @@ type StreamResult = {
   mode: UploadMode
   rollName: string
   rollId?: string
+  settings: ImportSettings
   fileName: string
   bytesWritten: number
   tmpZip: string | null
@@ -50,6 +59,15 @@ function normalizeRollId(value: string): string | undefined {
 async function removeTempArtifacts(tmpZip: string, imageFiles: UploadedTempImage[] = []) {
   await fs.unlink(tmpZip).catch(() => {})
   await Promise.all(imageFiles.map(file => fs.unlink(file.tmpPath).catch(() => {})))
+}
+
+async function getUploadTempTtlMs() {
+  const settings = await prisma.appSettings.findUnique({ where: { id: 'singleton' } })
+  const hours = settings
+    ? mapDbAppSettings(settings).dataSafety.keepUploadTempFilesHours
+    : DEFAULT_APP_SETTINGS.dataSafety.keepUploadTempFilesHours
+
+  return hours * 60 * 60 * 1000
 }
 
 /** Stream multipart body to temp files on disk.
@@ -88,6 +106,7 @@ async function streamToDisk(
     request.signal.addEventListener('abort', onAbort, { once: true })
     let rollName = ''
     let rollId: string | undefined
+    const rawSettings: { frameNumberStart?: string; autoRotationPolicy?: string; duplicateHandling?: string } = {}
     let zipName = ''
     let zipBytes = 0
     let zipCount = 0
@@ -176,17 +195,22 @@ async function streamToDisk(
       if (name === 'rollId') {
         rollId = normalizeRollId(val)
       }
+      if (name === 'frameNumberStart') rawSettings.frameNumberStart = val.trim()
+      if (name === 'autoRotationPolicy') rawSettings.autoRotationPolicy = val.trim()
+      if (name === 'duplicateHandling') rawSettings.duplicateHandling = val.trim()
     })
 
     bb.on('finish', async () => {
       try {
         await Promise.all(writes)
+        const settings = parseImportSettings(rawSettings)
 
         if (zipCount === 1) {
           done(() => resolve({
             mode: 'zip',
             rollName,
             rollId,
+            settings,
             fileName: zipName,
             bytesWritten: zipBytes,
             tmpZip,
@@ -200,6 +224,7 @@ async function streamToDisk(
             mode: 'files',
             rollName,
             rollId,
+            settings,
             fileName: imageCount === 1 ? imageFiles[0].originalName : `${imageCount} files`,
             bytesWritten: imageFiles.reduce((sum, file) => sum + file.bytesWritten, 0),
             tmpZip: null,
@@ -244,7 +269,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const cleanup = await pruneStaleUploadTempArtifacts()
+    const cleanup = await pruneStaleUploadTempArtifacts(Date.now(), await getUploadTempTtlMs())
     if (cleanup.deleted.length > 0) {
       console.info(
         '[upload] pruned stale temp artifacts',
@@ -268,6 +293,7 @@ export async function POST(request: NextRequest) {
       imageFiles: result.imageFiles,
       rollName: result.rollName,
       rollId: result.rollId,
+      settings: result.settings,
       fileName: result.fileName,
     }))
 
@@ -288,6 +314,9 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     await removeTempArtifacts(tmpZip)
     await fs.unlink(metaFile).catch(() => {})
+    if (err instanceof ImportSettingsValidationError) {
+      return NextResponse.json(formatImportSettingsValidationError(err), { status: 400 })
+    }
     const rawMessage = err instanceof Error ? err.message : 'Upload failed'
     const isUnexpectedEnd = /unexpected end of form/i.test(rawMessage)
     const message = isUnexpectedEnd

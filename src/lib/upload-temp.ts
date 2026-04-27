@@ -6,7 +6,9 @@ const TEMP_PREFIX = 'grained-'
 const CHUNK_PREFIX = 'grained-chunks-'
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000
 
-function getLifecycleTtlMs(): number {
+function getLifecycleTtlMs(overrideMs?: number): number {
+  if (overrideMs && Number.isFinite(overrideMs) && overrideMs > 0) return overrideMs
+
   const raw = process.env.UPLOAD_TEMP_TTL_MS
   if (!raw) return DEFAULT_TTL_MS
 
@@ -39,9 +41,9 @@ function isUploadTempArtifact(name: string): boolean {
   return /-img-\d{4}\.[a-z0-9]+$/i.test(name)
 }
 
-export async function pruneStaleUploadTempArtifacts(now = Date.now()) {
+export async function pruneStaleUploadTempArtifacts(now = Date.now(), ttlMsOverride?: number) {
   const dir = tmpdir()
-  const ttlMs = getLifecycleTtlMs()
+  const ttlMs = getLifecycleTtlMs(ttlMsOverride)
   const cutoff = now - ttlMs
 
   const names = await fs.readdir(dir)

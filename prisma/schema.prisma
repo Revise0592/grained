@@ -105,7 +105,6 @@ model SavedFilmStock {
   createdAt DateTime @default(now())
 }
 
-
 model AppSettings {
   id                 String   @id @default("singleton")
   metadataDefaults   Json
@@ -114,4 +113,12 @@ model AppSettings {
   libraryBehavior    Json
   dataSafety         Json
   updatedAt          DateTime @updatedAt
+}
+
+model Settings {
+  id                   Int    @id @default(1)
+  defaultLab           String?
+  defaultDevelopProcess String?
+  defaultFilmFormat    String?
+  defaultCommonTags    Json?
 }

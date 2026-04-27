@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, Pencil, Trash2, Camera, Star, ImageIcon, CheckSquare, X, Square, Tag, Plus } from 'lucide-react'
@@ -8,6 +8,7 @@ import { cn, formatDate, imageUrl, thumbPath } from '@/lib/utils'
 import { Lightbox } from '@/components/lightbox'
 import { Comments } from '@/components/comments'
 import { UploadZone } from '@/components/upload-zone'
+import type { AppSettingsShape } from '@/lib/settings'
 import type { Roll, Photo, RollComment, Tag as PrismaTag } from '@prisma/client'
 
 type RollWithRelations = Roll & {
@@ -30,6 +31,16 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deletingSelected, setDeletingSelected] = useState(false)
   const [showUploader, setShowUploader] = useState(false)
+  const [requireDeleteConfirmation, setRequireDeleteConfirmation] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then((settings: AppSettingsShape) => {
+        setRequireDeleteConfirmation(settings.dataSafety.requireDeleteConfirmation)
+      })
+      .catch(() => {})
+  }, [])
 
   const enterSelectMode = () => {
     setSelectMode(true)
@@ -50,7 +61,10 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
 
   const deleteSelected = async () => {
     if (!selected.size) return
-    if (!confirm(`Delete ${selected.size} photo${selected.size > 1 ? 's' : ''}? This cannot be undone.`)) return
+    if (
+      requireDeleteConfirmation &&
+      !confirm(`Delete ${selected.size} photo${selected.size > 1 ? 's' : ''}? This cannot be undone.`)
+    ) return
     setDeletingSelected(true)
     await Promise.all([...selected].map(id => fetch(`/api/photos/${id}`, { method: 'DELETE' })))
     setPhotos(prev => prev.filter(p => !selected.has(p.id)))
@@ -59,7 +73,10 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
   }
 
   const deleteRoll = async () => {
-    if (!confirm(`Delete "${roll.name}" and all its photos? This cannot be undone.`)) return
+    if (
+      requireDeleteConfirmation &&
+      !confirm(`Delete "${roll.name}" and all its photos? This cannot be undone.`)
+    ) return
     setDeleting(true)
     await fetch(`/api/rolls/${roll.id}`, { method: 'DELETE' })
     router.push('/')

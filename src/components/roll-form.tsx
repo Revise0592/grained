@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ChevronDown, Loader2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { FILM_STOCKS, FILM_FORMATS, DEVELOP_PROCESSES, PUSH_PULL_VALUES } from '@/lib/film-stocks'
+import { normalizeTag, normalizeTags, type AppSettingsShape } from '@/lib/settings'
 import type { Roll } from '@prisma/client'
 
 interface RollFormProps {
@@ -50,12 +51,33 @@ export function RollForm({ initial, rollId, initialTags }: RollFormProps) {
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    if (rollId) return
+
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then((settings: AppSettingsShape) => {
+        const defaults = settings.metadataDefaults
+        setForm(prev => ({
+          ...prev,
+          lab: prev.lab || defaults.defaultLab || '',
+          developProcess: prev.developProcess || defaults.defaultDevelopProcess || '',
+          filmFormat: prev.filmFormat || defaults.defaultFilmFormat || '',
+          camera: prev.camera || defaults.defaultCamera || '',
+          lens: prev.lens || defaults.defaultLens || '',
+        }))
+        setCameraQuery(prev => prev || defaults.defaultCamera || '')
+        setTags(prev => normalizeTags([...defaults.defaultCommonTags, ...prev]))
+      })
+      .catch(() => {})
+  }, [rollId])
+
   const tagSuggestions = tagInput
     ? allTags.filter(t => t.toLowerCase().includes(tagInput.toLowerCase()) && !tags.includes(t)).slice(0, 6)
     : allTags.filter(t => !tags.includes(t)).slice(0, 6)
 
   const addTag = (name: string) => {
-    const trimmed = name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+    const trimmed = normalizeTag(name)
     if (!trimmed || tags.includes(trimmed)) return
     setTags(prev => [...prev, trimmed])
     setTagInput('')

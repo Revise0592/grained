@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { RollCard } from '@/components/roll-card'
 import { TagFilter } from '@/components/tag-filter'
 import { Film, Plus } from 'lucide-react'
+import { DEFAULT_APP_SETTINGS, mapDbAppSettings } from '@/lib/settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +14,7 @@ export default async function Home({
 }) {
   const { tag } = await searchParams
 
-  const [rolls, allTags] = await Promise.all([
+  const [rolls, allTags, appSettings] = await Promise.all([
     prisma.roll.findMany({
       where: tag ? { tags: { some: { name: tag } } } : undefined,
       orderBy: { createdAt: 'desc' },
@@ -30,7 +31,11 @@ export default async function Home({
       orderBy: { name: 'asc' },
       include: { _count: { select: { rolls: true } } },
     }),
+    prisma.appSettings.findUnique({ where: { id: 'singleton' } }),
   ])
+  const displayPreferences = appSettings
+    ? mapDbAppSettings(appSettings).displayPreferences
+    : DEFAULT_APP_SETTINGS.displayPreferences
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
@@ -71,7 +76,7 @@ export default async function Home({
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {rolls.map(roll => (
-              <RollCard key={roll.id} roll={roll} />
+              <RollCard key={roll.id} roll={roll} preferences={displayPreferences} />
             ))}
           </div>
         </>

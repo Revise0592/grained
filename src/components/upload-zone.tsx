@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { UploadCloud, FileArchive, FileImage, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import type { AppSettingsShape } from '@/lib/settings'
 
 interface UploadZoneProps {
   onSuccess?: (rollId: string) => void
@@ -33,11 +34,25 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [selectionMode, setSelectionMode] = useState<'zip' | 'files' | null>(null)
   const [rollName, setRollName] = useState('')
+  const [frameNumberStart, setFrameNumberStart] = useState('')
+  const [autoRotationPolicy, setAutoRotationPolicy] = useState('exif-only')
+  const [duplicateHandling, setDuplicateHandling] = useState('rename')
   const [progress, setProgress] = useState<ProgressState>({ stage: 'idle' })
   const [dragOver, setDragOver] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const rollNameRef = useRef(rollName)
   rollNameRef.current = rollName
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then((settings: AppSettingsShape) => {
+        setFrameNumberStart(settings.importDefaults.frameNumberStart?.toString() ?? '')
+        setAutoRotationPolicy(settings.importDefaults.autoRotationPolicy)
+        setDuplicateHandling(settings.importDefaults.duplicateHandling)
+      })
+      .catch(() => {})
+  }, [])
 
   const busy =
     progress.stage === 'uploading' ||
@@ -168,6 +183,11 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
       if (targetRollId) {
         formData.append('rollId', targetRollId)
       }
+      if (frameNumberStart) {
+        formData.append('frameNumberStart', frameNumberStart)
+      }
+      formData.append('autoRotationPolicy', autoRotationPolicy)
+      formData.append('duplicateHandling', duplicateHandling)
 
       const uploadData = await new Promise<{ jobId?: string; error?: string }>((resolve, reject) => {
         const xhr = new XMLHttpRequest()
@@ -322,6 +342,7 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
               </p>
             </div>
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }}
               className="px-4 py-2 rounded-md bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/90 transition-colors"
             >
@@ -351,6 +372,7 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
               </p>
             </div>
             <button
+              type="button"
               onClick={reset}
               className="text-xs text-muted-foreground hover:text-destructive transition-colors shrink-0"
             >
@@ -371,7 +393,45 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
             </div>
           )}
 
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div>
+              <label className="text-sm font-medium text-foreground block mb-1.5">Frame start</label>
+              <input
+                type="number"
+                min="0"
+                value={frameNumberStart}
+                onChange={(e) => setFrameNumberStart(e.target.value)}
+                className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground block mb-1.5">Rotation</label>
+              <select
+                value={autoRotationPolicy}
+                onChange={(e) => setAutoRotationPolicy(e.target.value)}
+                className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                <option value="off">Off</option>
+                <option value="exif-only">EXIF only</option>
+                <option value="force-upright">Force upright</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground block mb-1.5">Duplicates</label>
+              <select
+                value={duplicateHandling}
+                onChange={(e) => setDuplicateHandling(e.target.value)}
+                className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                <option value="skip">Skip</option>
+                <option value="rename">Rename</option>
+                <option value="replace">Replace</option>
+              </select>
+            </div>
+          </div>
+
           <button
+            type="button"
             onClick={upload}
             className="w-full py-2.5 rounded-md bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/90 transition-colors"
           >
@@ -442,6 +502,7 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
             <span>{progress.message}</span>
           </div>
           <button
+            type="button"
             onClick={reset}
             className="text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
           >

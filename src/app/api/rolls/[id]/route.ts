@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { slugify, getUploadDir } from '@/lib/utils'
 import fs from 'fs/promises'
 import path from 'path'
+import { DEFAULT_APP_SETTINGS, mapDbAppSettings } from '@/lib/settings'
 
 export async function GET(
   _req: NextRequest,
@@ -80,9 +81,18 @@ export async function PUT(
   const savedFilm = roll.filmStock
   const savedIso = roll.iso
 
+  const appSettings = await prisma.appSettings.findUnique({ where: { id: 'singleton' } })
+  const libraryBehavior = appSettings
+    ? mapDbAppSettings(appSettings).libraryBehavior
+    : DEFAULT_APP_SETTINGS.libraryBehavior
+
   await Promise.all([
-    savedCamera ? prisma.savedCamera.upsert({ where: { name: savedCamera }, update: {}, create: { name: savedCamera } }) : null,
-    savedFilm ? prisma.savedFilmStock.upsert({ where: { name: savedFilm }, update: {}, create: { name: savedFilm, iso: savedIso ?? null } }) : null,
+    libraryBehavior.saveCamerasAutomatically && savedCamera
+      ? prisma.savedCamera.upsert({ where: { name: savedCamera }, update: {}, create: { name: savedCamera } })
+      : null,
+    libraryBehavior.saveFilmStocksAutomatically && savedFilm
+      ? prisma.savedFilmStock.upsert({ where: { name: savedFilm }, update: {}, create: { name: savedFilm, iso: savedIso ?? null } })
+      : null,
   ])
 
   return NextResponse.json(roll)

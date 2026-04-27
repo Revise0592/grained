@@ -5,6 +5,7 @@ import { X, ChevronLeft, ChevronRight, MessageSquare, Pencil, Check, RotateCcw, 
 import { cn, imageUrl, formatDate, thumbPath } from '@/lib/utils'
 import type { Photo, PhotoComment } from '@prisma/client'
 import { Comments } from './comments'
+import type { AppSettingsShape } from '@/lib/settings'
 
 type PhotoWithComments = Photo & { comments: PhotoComment[] }
 
@@ -37,6 +38,7 @@ export function Lightbox({ photos, initialIndex, onClose, onDelete, onRotate, ro
   const [deleting, setDeleting] = useState(false)
   const [panel, setPanel] = useState<'info' | 'comments'>('info')
   const [localRotation, setLocalRotation] = useState(0)
+  const [requireDeleteConfirmation, setRequireDeleteConfirmation] = useState(true)
   // Mobile: whether the bottom info panel is expanded
   const [mobilePanel, setMobilePanel] = useState(false)
 
@@ -58,6 +60,15 @@ export function Lightbox({ photos, initialIndex, onClose, onDelete, onRotate, ro
   useEffect(() => {
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = '' }
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then((settings: AppSettingsShape) => {
+        setRequireDeleteConfirmation(settings.dataSafety.requireDeleteConfirmation)
+      })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -117,7 +128,7 @@ export function Lightbox({ photos, initialIndex, onClose, onDelete, onRotate, ro
 
   const deletePhoto = async () => {
     if (!current) return
-    if (!confirm('Delete this photo? This cannot be undone.')) return
+    if (requireDeleteConfirmation && !confirm('Delete this photo? This cannot be undone.')) return
     setDeleting(true)
     await fetch(`/api/photos/${current.id}`, { method: 'DELETE' })
     onDelete?.(current.id)
