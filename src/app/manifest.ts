@@ -1,10 +1,13 @@
 import type { MetadataRoute } from 'next'
+import { getSettings } from '@/lib/server-settings'
 
-export default function manifest(): MetadataRoute.Manifest {
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const settings = await getSettings()
+
   return {
-    name: 'Grained',
-    short_name: 'Grained',
-    description: 'Film photography archive',
+    name: settings.metadata.appName,
+    short_name: settings.metadata.appName,
+    description: settings.metadata.appDescription,
     start_url: '/',
     display: 'standalone',
     background_color: '#161513',

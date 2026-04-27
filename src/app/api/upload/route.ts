@@ -75,9 +75,9 @@ async function streamToDisk(
     const abortError = new UploadError('Upload was interrupted before completion. Please try again.', 400)
 
     const destroyWriters = () => {
-      for (const ws of openWriters) {
+      Array.from(openWriters).forEach((ws) => {
         ws.destroy(abortError)
-      }
+      })
       openWriters.clear()
     }
 

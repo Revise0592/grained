@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { generateUniqueSlug } from '@/lib/server-utils'
+import { getSettings } from '@/lib/server-settings'
 
 export async function GET() {
   const rolls = await prisma.roll.findMany({
@@ -47,10 +48,13 @@ export async function POST(request: NextRequest) {
     },
   })
 
-  await Promise.all([
-    camera ? prisma.savedCamera.upsert({ where: { name: camera }, update: {}, create: { name: camera } }) : null,
-    filmStock ? prisma.savedFilmStock.upsert({ where: { name: filmStock }, update: {}, create: { name: filmStock, iso: iso ? Number(iso) : null } }) : null,
-  ])
+  const settings = await getSettings()
+  if (settings.import.autoSaveLibraryItems) {
+    await Promise.all([
+      camera ? prisma.savedCamera.upsert({ where: { name: camera }, update: { deletedAt: null }, create: { name: camera } }) : null,
+      filmStock ? prisma.savedFilmStock.upsert({ where: { name: filmStock }, update: { deletedAt: null, iso: iso ? Number(iso) : null }, create: { name: filmStock, iso: iso ? Number(iso) : null } }) : null,
+    ])
+  }
 
   return NextResponse.json(roll, { status: 201 })
 }

@@ -16,7 +16,7 @@ type RollWithRelations = Roll & {
   tags: PrismaTag[]
 }
 
-export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
+export function RollDetail({ roll: initial, safety }: { roll: RollWithRelations; safety: { confirmDestructiveActions: boolean; redactSensitiveMetadata: boolean } }) {
   const router = useRouter()
   const [roll] = useState(initial)
   const [photos, setPhotos] = useState<Photo[]>(initial.photos)
@@ -50,16 +50,16 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
 
   const deleteSelected = async () => {
     if (!selected.size) return
-    if (!confirm(`Delete ${selected.size} photo${selected.size > 1 ? 's' : ''}? This cannot be undone.`)) return
+    if (safety.confirmDestructiveActions && !confirm(`Delete ${selected.size} photo${selected.size > 1 ? 's' : ''}? This cannot be undone.`)) return
     setDeletingSelected(true)
-    await Promise.all([...selected].map(id => fetch(`/api/photos/${id}`, { method: 'DELETE' })))
+    await Promise.all(Array.from(selected).map(id => fetch(`/api/photos/${id}`, { method: 'DELETE' })))
     setPhotos(prev => prev.filter(p => !selected.has(p.id)))
     exitSelectMode()
     setDeletingSelected(false)
   }
 
   const deleteRoll = async () => {
-    if (!confirm(`Delete "${roll.name}" and all its photos? This cannot be undone.`)) return
+    if (safety.confirmDestructiveActions && !confirm(`Delete "${roll.name}" and all its photos? This cannot be undone.`)) return
     setDeleting(true)
     await fetch(`/api/rolls/${roll.id}`, { method: 'DELETE' })
     router.push('/')
@@ -295,8 +295,8 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
               <InfoRow label="Push/Pull" value={roll.pushPull && roll.pushPull !== '0' ? roll.pushPull : null} />
             </InfoSection>
             <InfoSection title="Camera">
-              <InfoRow label="Camera" value={roll.camera} />
-              <InfoRow label="Lens" value={roll.lens} />
+              <InfoRow label="Camera" value={safety.redactSensitiveMetadata ? 'Hidden by safety settings' : roll.camera} />
+              <InfoRow label="Lens" value={safety.redactSensitiveMetadata ? 'Hidden by safety settings' : roll.lens} />
             </InfoSection>
             <InfoSection title="Dates">
               <InfoRow label="Shot" value={
@@ -310,7 +310,7 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
               <InfoRow label="Added" value={formatDate(roll.createdAt)} />
             </InfoSection>
             <InfoSection title="Development">
-              <InfoRow label="Lab" value={roll.lab} />
+              <InfoRow label="Lab" value={safety.redactSensitiveMetadata ? 'Hidden by safety settings' : roll.lab} />
               <InfoRow label="Process" value={roll.developProcess} />
             </InfoSection>
             {roll.notes && (
@@ -337,7 +337,7 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
           onClose={() => setLightboxIndex(null)}
           onDelete={handleLightboxDelete}
           onRotate={handleLightboxRotate}
-          rollInfo={{ filmStock: roll.filmStock, camera: roll.camera, lens: roll.lens }}
+          rollInfo={{ filmStock: roll.filmStock, camera: safety.redactSensitiveMetadata ? null : roll.camera, lens: safety.redactSensitiveMetadata ? null : roll.lens }}
         />
       )}
     </>

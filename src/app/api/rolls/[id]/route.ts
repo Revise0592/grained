@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { slugify, getUploadDir } from '@/lib/utils'
 import fs from 'fs/promises'
 import path from 'path'
+import { getSettings } from '@/lib/server-settings'
 
 export async function GET(
   _req: NextRequest,
@@ -80,10 +81,13 @@ export async function PUT(
   const savedFilm = roll.filmStock
   const savedIso = roll.iso
 
-  await Promise.all([
-    savedCamera ? prisma.savedCamera.upsert({ where: { name: savedCamera }, update: {}, create: { name: savedCamera } }) : null,
-    savedFilm ? prisma.savedFilmStock.upsert({ where: { name: savedFilm }, update: {}, create: { name: savedFilm, iso: savedIso ?? null } }) : null,
-  ])
+  const settings = await getSettings()
+  if (settings.import.autoSaveLibraryItems) {
+    await Promise.all([
+      savedCamera ? prisma.savedCamera.upsert({ where: { name: savedCamera }, update: { deletedAt: null }, create: { name: savedCamera } }) : null,
+      savedFilm ? prisma.savedFilmStock.upsert({ where: { name: savedFilm }, update: { deletedAt: null, iso: savedIso ?? null }, create: { name: savedFilm, iso: savedIso ?? null } }) : null,
+    ])
+  }
 
   return NextResponse.json(roll)
 }

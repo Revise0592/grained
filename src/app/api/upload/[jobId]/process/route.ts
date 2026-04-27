@@ -7,6 +7,7 @@ import sharp from 'sharp'
 import { prisma } from '@/lib/db'
 import { isImageFile, getUploadDir } from '@/lib/utils'
 import { generateUniqueSlug } from '@/lib/server-utils'
+import { getSettings } from '@/lib/server-settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -63,11 +64,14 @@ async function persistPhotos(meta: UploadMeta, sourceImages: SourceImage[], send
     return match ? Number.parseInt(match[1], 10) + 1 : 1
   })()
 
+  const settings = await getSettings()
   const uploadDir = getUploadDir()
   const rollDir = path.join(uploadDir, roll.id)
   const thumbDir = path.join(rollDir, 'thumbs')
   await fs.mkdir(rollDir, { recursive: true })
   await fs.mkdir(thumbDir, { recursive: true })
+
+  const usedOriginalNames: string[] = []
 
   const photoData: {
     rollId: string
@@ -81,11 +85,12 @@ async function persistPhotos(meta: UploadMeta, sourceImages: SourceImage[], send
 
   for (let i = 0; i < total; i++) {
     const image = sourceImages[i]
-    const ext = path.extname(image.originalName).toLowerCase()
+    const sourceName = settings.import.allowDuplicateFilenames ? image.originalName : uniquifyName(image.originalName, usedOriginalNames)
+    const ext = path.extname(sourceName).toLowerCase()
     const safeExt = ext || '.jpg'
     const filename = `${String(nextFilenameStart + i).padStart(4, '0')}${safeExt}`
 
-    send({ stage: 'processing', current: i + 1, total, name: image.originalName })
+    send({ stage: 'processing', current: i + 1, total, name: sourceName })
 
     const imgBuffer = await image.readBuffer()
     await fs.writeFile(path.join(rollDir, filename), imgBuffer)
@@ -108,10 +113,12 @@ async function persistPhotos(meta: UploadMeta, sourceImages: SourceImage[], send
       // Sharp can't process this format — continue without thumbnail
     }
 
+    usedOriginalNames.push(sourceName)
+
     photoData.push({
       rollId: roll.id,
       filename,
-      originalName: image.originalName,
+      originalName: sourceName,
       path: `${roll.id}/${filename}`,
       width,
       height,
@@ -269,4 +276,18 @@ export async function GET(
       'X-Accel-Buffering': 'no',
     },
   })
+}
+
+
+function uniquifyName(name: string, existing: string[]): string {
+  const ext = path.extname(name)
+  const base = path.basename(name, ext)
+  const taken = new Set(existing.map((item) => item.toLowerCase()))
+  let candidate = name
+  let suffix = 1
+  while (taken.has(candidate.toLowerCase())) {
+    candidate = `${base}-${suffix}${ext}`
+    suffix += 1
+  }
+  return candidate
 }

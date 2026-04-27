@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 
-export function StatsBar() {
+export function StatsBar({ visible = true }: { visible?: boolean }) {
   const pathname = usePathname()
   const [stats, setStats] = useState<{ rolls: number; photos: number } | null>(null)
 
@@ -14,7 +14,7 @@ export function StatsBar() {
       .catch(() => {})
   }, [])
 
-  if (pathname === '/login') return null
+  if (!visible || pathname === '/login') return null
 
   if (!stats) return null
 

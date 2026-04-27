@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/db'
 import { RollDetail } from './roll-detail'
+import { getSettings } from '@/lib/server-settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,5 +24,7 @@ export default async function RollPage({ params }: { params: Promise<{ id: strin
 
   if (!roll) notFound()
 
-  return <RollDetail roll={roll} />
+  const settings = await getSettings()
+
+  return <RollDetail roll={roll} safety={settings.safety} />
 }

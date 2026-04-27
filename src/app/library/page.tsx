@@ -10,15 +10,18 @@ export default function LibraryPage() {
   const [cameras, setCameras] = useState<SavedCamera[]>([])
   const [filmStocks, setFilmStocks] = useState<SavedFilmStock[]>([])
   const [loading, setLoading] = useState(true)
+  const [confirmDestructiveActions, setConfirmDestructiveActions] = useState(true)
 
   const fetchAll = useCallback(async () => {
-    const [cRes, fRes] = await Promise.all([
+    const [cRes, fRes, sRes] = await Promise.all([
       fetch('/api/saved/cameras'),
       fetch('/api/saved/film-stocks'),
+      fetch('/api/settings'),
     ])
-    const [c, f] = await Promise.all([cRes.json(), fRes.json()])
+    const [c, f, s] = await Promise.all([cRes.json(), fRes.json(), sRes.json()])
     setCameras(c)
     setFilmStocks(f)
+    setConfirmDestructiveActions(Boolean(s?.settings?.safety?.confirmDestructiveActions ?? true))
     setLoading(false)
   }, [])
 
@@ -53,7 +56,7 @@ export default function LibraryPage() {
             emptyMessage="No cameras saved yet. They'll appear here after you save a roll with a camera."
           >
             {cameras.map(c => (
-              <LibraryRow key={c.id} label={c.name} onDelete={() => deleteCamera(c.id)} />
+              <LibraryRow key={c.id} label={c.name} onDelete={() => deleteCamera(c.id)} requireConfirm={confirmDestructiveActions} />
             ))}
           </Section>
 
@@ -68,6 +71,7 @@ export default function LibraryPage() {
                 label={f.name}
                 meta={f.iso ? `ISO ${f.iso}` : undefined}
                 onDelete={() => deleteFilmStock(f.id)}
+                requireConfirm={confirmDestructiveActions}
               />
             ))}
           </Section>
@@ -108,10 +112,14 @@ function Section({
   )
 }
 
-function LibraryRow({ label, meta, onDelete }: { label: string; meta?: string; onDelete: () => void }) {
+function LibraryRow({ label, meta, onDelete, requireConfirm }: { label: string; meta?: string; onDelete: () => void; requireConfirm: boolean }) {
   const [confirming, setConfirming] = useState(false)
 
   const handleDelete = () => {
+    if (!requireConfirm) {
+      onDelete()
+      return
+    }
     if (!confirming) { setConfirming(true); return }
     onDelete()
   }
@@ -126,13 +134,13 @@ function LibraryRow({ label, meta, onDelete }: { label: string; meta?: string; o
         onClick={handleDelete}
         onBlur={() => setConfirming(false)}
         className={`shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${
-          confirming
+          confirming && requireConfirm
             ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
             : 'text-muted-foreground hover:text-destructive hover:bg-destructive/10'
         }`}
       >
         <Trash2 className="h-3.5 w-3.5" />
-        {confirming ? 'Confirm' : 'Remove'}
+        {confirming && requireConfirm ? 'Confirm' : 'Remove'}
       </button>
     </li>
   )
