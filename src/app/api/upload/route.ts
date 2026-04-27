@@ -3,8 +3,6 @@ import busboy from 'busboy'
 import fs from 'fs/promises'
 import { createWriteStream } from 'fs'
 import { randomBytes } from 'crypto'
-import path from 'path'
-import { tmpdir } from 'os'
 import { isImageFile } from '@/lib/utils'
 import {
   createUploadTempImagePath,
@@ -25,6 +23,7 @@ type UploadedTempImage = {
 type StreamResult = {
   mode: UploadMode
   rollName: string
+  rollId?: string
   fileName: string
   bytesWritten: number
   tmpZip: string | null
@@ -47,14 +46,9 @@ function normalizeRollId(value: string): string | undefined {
   return trimmed
 }
 
-/** Stream the multipart body to a temp file on disk.
-async function removeTempArtifacts(jobId: string, tmpZip: string, imageFiles: UploadedTempImage[] = []) {
+async function removeTempArtifacts(tmpZip: string, imageFiles: UploadedTempImage[] = []) {
   await fs.unlink(tmpZip).catch(() => {})
   await Promise.all(imageFiles.map(file => fs.unlink(file.tmpPath).catch(() => {})))
-
-  const names = await fs.readdir(tmpdir()).catch(() => [])
-  const tempImageNames = names.filter((name) => name.startsWith(`grained-${jobId}-img-`))
-  await Promise.all(tempImageNames.map((name) => fs.unlink(path.join(tmpdir(), name)).catch(() => {})))
 }
 
 /** Stream multipart body to temp files on disk.
@@ -64,7 +58,6 @@ async function streamToDisk(
   jobId: string,
   tmpZip: string,
   contentType: string,
-): Promise<{ rollName: string; rollId?: string; fileName: string; bytesWritten: number }> {
 ): Promise<StreamResult> {
   return new Promise((resolve, reject) => {
     let settled = false
@@ -78,9 +71,6 @@ async function streamToDisk(
     const bb = busboy({ headers: { 'content-type': contentType } })
     let rollName = ''
     let rollId: string | undefined
-    let fileName = ''
-    let bytesWritten = 0
-    let fileWritePromise: Promise<void> | null = null
     let zipName = ''
     let zipBytes = 0
     let zipCount = 0
@@ -136,22 +126,22 @@ async function streamToDisk(
       imageIndex += 1
       const tmpPath = createUploadTempImagePath(jobId, imageIndex, filename)
       const ws = createWriteStream(tmpPath)
-      let bytesWritten = 0
+      let imageBytes = 0
       const writePromise = new Promise<void>((res, rej) => {
         ws.on('finish', res)
         ws.on('error', rej)
         stream.on('error', rej)
       })
       stream.on('data', (chunk: Buffer) => {
-        bytesWritten += chunk.length
+        imageBytes += chunk.length
       })
       stream.pipe(ws)
       writes.push(writePromise)
-      imageFiles.push({ originalName: filename, tmpPath, bytesWritten })
+      imageFiles.push({ originalName: filename, tmpPath, bytesWritten: 0 })
       writePromise.then(() => {
         const target = imageFiles.find(file => file.tmpPath === tmpPath)
         if (target) {
-          target.bytesWritten = bytesWritten
+          target.bytesWritten = imageBytes
         }
       }).catch(() => {})
     })
@@ -171,6 +161,7 @@ async function streamToDisk(
           done(() => resolve({
             mode: 'zip',
             rollName,
+            rollId,
             fileName: zipName,
             bytesWritten: zipBytes,
             tmpZip,
@@ -178,12 +169,12 @@ async function streamToDisk(
           }))
           return
         }
-        done(() => resolve({ rollName, rollId, fileName, bytesWritten }))
 
         if (imageCount > 0) {
           done(() => resolve({
             mode: 'files',
             rollName,
+            rollId,
             fileName: imageCount === 1 ? imageFiles[0].originalName : `${imageCount} files`,
             bytesWritten: imageFiles.reduce((sum, file) => sum + file.bytesWritten, 0),
             tmpZip: null,
@@ -246,17 +237,15 @@ export async function POST(request: NextRequest) {
   const { tmpZip, metaFile } = createUploadTempPaths(jobId)
 
   try {
-    const { rollName, rollId, fileName, bytesWritten } = await streamToDisk(request, tmpZip, contentType)
-
-    // Write job metadata so the processing endpoint can find it
-    await fs.writeFile(metaFile, JSON.stringify({ tmpZip, rollName, rollId, fileName }))
     const result = await streamToDisk(request, jobId, tmpZip, contentType)
 
+    // Write job metadata so the processing endpoint can find it
     await fs.writeFile(metaFile, JSON.stringify({
       mode: result.mode,
       tmpZip: result.tmpZip,
       imageFiles: result.imageFiles,
       rollName: result.rollName,
+      rollId: result.rollId,
       fileName: result.fileName,
     }))
 
@@ -275,7 +264,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ jobId })
   } catch (err) {
-    await removeTempArtifacts(jobId, tmpZip)
+    await removeTempArtifacts(tmpZip)
     await fs.unlink(metaFile).catch(() => {})
     const message = err instanceof Error ? err.message : 'Upload failed'
     const status = err instanceof UploadError ? err.status : 500
