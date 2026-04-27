@@ -104,3 +104,12 @@ model SavedFilmStock {
   iso       Int?
   createdAt DateTime @default(now())
 }
+
+
+model Settings {
+  id                   Int    @id @default(1)
+  defaultLab           String?
+  defaultDevelopProcess String?
+  defaultFilmFormat    String?
+  defaultCommonTags    Json?
+}
