@@ -3,6 +3,8 @@ import { prisma } from '@/lib/db'
 import { RollCard } from '@/components/roll-card'
 import { TagFilter } from '@/components/tag-filter'
 import { Film, Plus } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { getDisplaySettings } from '@/lib/display-settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +15,7 @@ export default async function Home({
 }) {
   const { tag } = await searchParams
 
-  const [rolls, allTags] = await Promise.all([
+  const [rolls, allTags, displaySettings] = await Promise.all([
     prisma.roll.findMany({
       where: tag ? { tags: { some: { name: tag } } } : undefined,
       orderBy: { createdAt: 'desc' },
@@ -30,6 +32,7 @@ export default async function Home({
       orderBy: { name: 'asc' },
       include: { _count: { select: { rolls: true } } },
     }),
+    getDisplaySettings(),
   ])
 
   return (
@@ -69,9 +72,12 @@ export default async function Home({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          <div className={cn(
+            'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6',
+            displaySettings.cardDensity === 'compact' ? 'gap-3' : 'gap-4'
+          )}>
             {rolls.map(roll => (
-              <RollCard key={roll.id} roll={roll} />
+              <RollCard key={roll.id} roll={roll} cardDensity={displaySettings.cardDensity} dateDisplayFormat={displaySettings.dateDisplayFormat} />
             ))}
           </div>
         </>

@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import { Camera, Image as ImageIcon } from 'lucide-react'
-import { cn, formatDate, imageUrl } from '@/lib/utils'
+import { cn, imageUrl } from '@/lib/utils'
+import { formatDateForDisplay, type CardDensity, type DateDisplayFormat } from '@/lib/display-settings'
 import type { Roll, Photo } from '@prisma/client'
 
 type RollWithMeta = Roll & {
@@ -10,7 +11,15 @@ type RollWithMeta = Roll & {
   _count: { photos: number; comments: number }
 }
 
-export function RollCard({ roll }: { roll: RollWithMeta }) {
+export function RollCard({
+  roll,
+  cardDensity,
+  dateDisplayFormat,
+}: {
+  roll: RollWithMeta
+  cardDensity: CardDensity
+  dateDisplayFormat: DateDisplayFormat
+}) {
   const cover = roll.coverPhotoId
     ? (roll.photos.find(p => p.id === roll.coverPhotoId) ?? roll.photos[0])
     : roll.photos[0]
@@ -22,7 +31,6 @@ export function RollCard({ roll }: { roll: RollWithMeta }) {
       href={`/rolls/${roll.id}`}
       className="group block rounded-lg overflow-hidden border border-border bg-card hover:border-accent/40 transition-all duration-200 hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20"
     >
-      {/* Cover photo */}
       <div className="aspect-[4/3] bg-muted relative overflow-hidden">
         {cover ? (
           <img
@@ -37,7 +45,6 @@ export function RollCard({ roll }: { roll: RollWithMeta }) {
             <ImageIcon className="h-10 w-10 text-muted-foreground/30" />
           </div>
         )}
-        {/* Photo count badge */}
         {roll._count.photos > 0 && (
           <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded text-xs font-medium bg-black/60 text-white backdrop-blur-sm">
             {roll._count.photos}
@@ -45,29 +52,28 @@ export function RollCard({ roll }: { roll: RollWithMeta }) {
         )}
       </div>
 
-      {/* Info */}
-      <div className="p-3.5">
-        <h3 className="font-medium text-foreground truncate text-sm leading-tight">{roll.name}</h3>
+      <div className={cn(cardDensity === 'compact' ? 'p-2.5' : 'p-3.5')}>
+        <h3 className={cn('font-medium text-foreground truncate leading-tight', cardDensity === 'compact' ? 'text-xs' : 'text-sm')}>
+          {roll.name}
+        </h3>
 
-        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <div className={cn('mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground', cardDensity === 'compact' ? 'text-[11px]' : 'text-xs')}>
           {roll.filmStock && (
             <span className="flex items-center gap-1 truncate">
               <Camera className="h-3 w-3 shrink-0" />
               {roll.filmStock}
             </span>
           )}
-          {roll.filmFormat && (
-            <span className="shrink-0">{roll.filmFormat}</span>
-          )}
+          {roll.filmFormat && <span className="shrink-0">{roll.filmFormat}</span>}
           {roll.iso && (
-            <span className="shrink-0">ISO {roll.iso}{roll.pushPull && roll.pushPull !== '0' ? ` ${roll.pushPull.startsWith('+') ? '' : ''}${roll.pushPull}` : ''}</span>
+            <span className="shrink-0">ISO {roll.iso}{roll.pushPull && roll.pushPull !== '0' ? ` ${roll.pushPull}` : ''}</span>
           )}
         </div>
 
         <div className="mt-2 text-xs text-muted-foreground/70">
           {roll.dateShotStart
-            ? formatDate(roll.dateShotStart)
-            : formatDate(roll.createdAt)}
+            ? formatDateForDisplay(roll.dateShotStart, dateDisplayFormat)
+            : formatDateForDisplay(roll.createdAt, dateDisplayFormat)}
         </div>
       </div>
     </Link>

@@ -104,3 +104,11 @@ model SavedFilmStock {
   iso       Int?
   createdAt DateTime @default(now())
 }
+
+model AppSettings {
+  id                Int    @id
+  themeMode         String @default("dark")
+  cardDensity       String @default("comfortable")
+  dateDisplayFormat String @default("relative")
+}
+

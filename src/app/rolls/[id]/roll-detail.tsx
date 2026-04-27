@@ -4,7 +4,8 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, Pencil, Trash2, Camera, Star, ImageIcon, CheckSquare, X, Square, Tag, Plus } from 'lucide-react'
-import { cn, formatDate, imageUrl, thumbPath } from '@/lib/utils'
+import { cn, imageUrl, thumbPath } from '@/lib/utils'
+import { formatDateForDisplay, type DateDisplayFormat } from '@/lib/display-settings'
 import { Lightbox } from '@/components/lightbox'
 import { Comments } from '@/components/comments'
 import { UploadZone } from '@/components/upload-zone'
@@ -16,7 +17,7 @@ type RollWithRelations = Roll & {
   tags: PrismaTag[]
 }
 
-export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
+export function RollDetail({ roll: initial, dateDisplayFormat }: { roll: RollWithRelations; dateDisplayFormat: DateDisplayFormat }) {
   const router = useRouter()
   const [roll] = useState(initial)
   const [photos, setPhotos] = useState<Photo[]>(initial.photos)
@@ -302,12 +303,12 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
               <InfoRow label="Shot" value={
                 roll.dateShotStart
                   ? roll.dateShotEnd && roll.dateShotEnd !== roll.dateShotStart
-                    ? `${formatDate(roll.dateShotStart)} – ${formatDate(roll.dateShotEnd)}`
-                    : formatDate(roll.dateShotStart)
+                    ? `${formatDateForDisplay(roll.dateShotStart, dateDisplayFormat)} – ${formatDateForDisplay(roll.dateShotEnd, dateDisplayFormat)}`
+                    : formatDateForDisplay(roll.dateShotStart, dateDisplayFormat)
                   : null
               } />
-              <InfoRow label="Developed" value={roll.dateDeveloped ? formatDate(roll.dateDeveloped) : null} />
-              <InfoRow label="Added" value={formatDate(roll.createdAt)} />
+              <InfoRow label="Developed" value={roll.dateDeveloped ? formatDateForDisplay(roll.dateDeveloped, dateDisplayFormat) : null} />
+              <InfoRow label="Added" value={formatDateForDisplay(roll.createdAt, dateDisplayFormat)} />
             </InfoSection>
             <InfoSection title="Development">
               <InfoRow label="Lab" value={roll.lab} />
