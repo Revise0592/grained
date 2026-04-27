@@ -3,19 +3,30 @@ import path from 'path'
 import fs from 'fs/promises'
 import { createWriteStream } from 'fs'
 import { tmpdir } from 'os'
+import { isLegacyChunkUploadEnabled } from '@/lib/upload-temp'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * POST /api/upload/assemble
+ * Deprecated fallback endpoint.
  *
- * Called after all chunks have been uploaded via /api/upload/chunk.
- * Concatenates chunks in order to produce the final .zip, writes a metadata
- * file for the /api/upload/[jobId]/process SSE endpoint, then returns { jobId }.
- *
- * Body (JSON): { jobId, totalChunks, fileName, rollName }
+ * Primary ingestion now happens through POST /api/upload as multipart streaming.
+ * Keep this route only for legacy clients while ENABLE_LEGACY_CHUNK_UPLOAD is enabled.
  */
 export async function POST(request: NextRequest) {
+  if (!isLegacyChunkUploadEnabled()) {
+    return NextResponse.json(
+      { error: 'Legacy assembly is disabled. Use POST /api/upload instead.' },
+      {
+        status: 410,
+        headers: {
+          'X-Upload-Path': '/api/upload',
+          'X-Deprecated-Endpoint': 'true',
+        },
+      },
+    )
+  }
+
   let body: { jobId?: unknown; totalChunks?: unknown; fileName?: unknown; rollName?: unknown }
   try {
     body = await request.json()
@@ -77,7 +88,15 @@ export async function POST(request: NextRequest) {
     // Remove chunk directory — assembled file is all we need now
     await fs.rm(chunkDir, { recursive: true, force: true }).catch(() => {})
 
-    return NextResponse.json({ jobId })
+    return NextResponse.json(
+      { jobId, fallback: true },
+      {
+        headers: {
+          'X-Upload-Path': '/api/upload',
+          'X-Deprecated-Endpoint': 'true',
+        },
+      },
+    )
   } catch (err) {
     // Best-effort cleanup on failure
     await fs.unlink(assembledPath).catch(() => {})

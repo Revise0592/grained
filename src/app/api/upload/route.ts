@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import busboy from 'busboy'
-import path from 'path'
 import fs from 'fs/promises'
 import { createWriteStream } from 'fs'
-import { tmpdir } from 'os'
 import { randomBytes } from 'crypto'
+import { createUploadTempPaths, pruneStaleUploadTempArtifacts } from '@/lib/upload-temp'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,7 +19,7 @@ async function streamToDisk(
   request: NextRequest,
   tmpPath: string,
   contentType: string,
-): Promise<{ rollName: string; fileName: string }> {
+): Promise<{ rollName: string; fileName: string; bytesWritten: number }> {
   return new Promise((resolve, reject) => {
     let settled = false
     const done = (fn: () => void) => {
@@ -30,6 +29,7 @@ async function streamToDisk(
     const bb = busboy({ headers: { 'content-type': contentType } })
     let rollName = ''
     let fileName = ''
+    let bytesWritten = 0
     let fileWritePromise: Promise<void> | null = null
 
     bb.on('file', (field, stream, info) => {
@@ -47,6 +47,9 @@ async function streamToDisk(
         ws.on('error', rej)
         stream.on('error', rej)
       })
+      stream.on('data', (chunk: Buffer) => {
+        bytesWritten += chunk.length
+      })
       stream.pipe(ws)
     })
 
@@ -61,7 +64,7 @@ async function streamToDisk(
           done(() => reject(new UploadError('No file provided')))
           return
         }
-        done(() => resolve({ rollName, fileName }))
+        done(() => resolve({ rollName, fileName, bytesWritten }))
       } catch (err) {
         done(() => reject(err))
       }
@@ -96,21 +99,39 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No request body' }, { status: 400 })
   }
 
+  try {
+    const cleanup = await pruneStaleUploadTempArtifacts()
+    if (cleanup.deleted.length > 0) {
+      console.info(
+        '[upload] pruned stale temp artifacts',
+        JSON.stringify({ scanned: cleanup.scanned, deleted: cleanup.deleted.length, ttlMs: cleanup.ttlMs }),
+      )
+    }
+  } catch (err) {
+    console.warn('[upload] temp artifact pruning failed', err)
+  }
+
   const jobId = randomBytes(16).toString('hex')
-  const tmpZip = path.join(tmpdir(), `grained-${jobId}.zip`)
-  const metaFile = path.join(tmpdir(), `grained-${jobId}.json`)
+  const { tmpZip, metaFile } = createUploadTempPaths(jobId)
 
   try {
-    const { rollName, fileName } = await streamToDisk(request, tmpZip, contentType)
+    const { rollName, fileName, bytesWritten } = await streamToDisk(request, tmpZip, contentType)
 
     // Write job metadata so the processing endpoint can find it
     await fs.writeFile(metaFile, JSON.stringify({ tmpZip, rollName, fileName }))
 
+    console.info(
+      '[upload] created temp upload artifacts',
+      JSON.stringify({ jobId, tmpZip, metaFile, fileName, bytesWritten }),
+    )
+
     return NextResponse.json({ jobId })
   } catch (err) {
     await fs.unlink(tmpZip).catch(() => {})
+    await fs.unlink(metaFile).catch(() => {})
     const message = err instanceof Error ? err.message : 'Upload failed'
     const status = err instanceof UploadError ? err.status : 500
+    console.error('[upload] failed to ingest upload', JSON.stringify({ jobId, status, message }))
     return NextResponse.json({ error: message }, { status })
   }
 }

@@ -11,20 +11,10 @@ interface UploadZoneProps {
 type ProgressState =
   | { stage: 'idle' }
   | { stage: 'uploading'; loaded: number; total: number }
-  | { stage: 'assembling' }
   | { stage: 'extracting'; message: string }
   | { stage: 'processing'; current: number; total: number; name: string }
   | { stage: 'done'; rollId: string; count: number }
   | { stage: 'error'; message: string }
-
-/** 10 MB per chunk — small enough to avoid any server-side body limits */
-const CHUNK_SIZE = 10 * 1024 * 1024
-
-function generateJobId(): string {
-  return Array.from(crypto.getRandomValues(new Uint8Array(16)))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-}
 
 function ProgressBar({ percent }: { percent: number }) {
   return (
@@ -49,7 +39,6 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
 
   const busy =
     progress.stage === 'uploading' ||
-    progress.stage === 'assembling' ||
     progress.stage === 'extracting' ||
     progress.stage === 'processing' ||
     progress.stage === 'done'
@@ -121,84 +110,52 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
   const upload = async () => {
     if (!file || busy) return
 
-    const jobId = generateJobId()
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
-    let bytesConfirmed = 0
-
     try {
-      // ── Phase 1: Upload file in 10 MB chunks ─────────────────────────────────
-      for (let i = 0; i < totalChunks; i++) {
-        const start = i * CHUNK_SIZE
-        const end = Math.min(start + CHUNK_SIZE, file.size)
-        const chunk = file.slice(start, end)
-        const chunkSize = end - start
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('name', rollName || file.name.replace(/\.zip$/i, ''))
 
-        await new Promise<void>((resolve, reject) => {
-          const xhr = new XMLHttpRequest()
-          xhr.open('POST', '/api/upload/chunk')
-          xhr.setRequestHeader('Content-Type', 'application/octet-stream')
-          xhr.setRequestHeader('X-Job-Id', jobId)
-          xhr.setRequestHeader('X-Chunk-Index', String(i))
-          xhr.setRequestHeader('X-Total-Chunks', String(totalChunks))
-          xhr.setRequestHeader('X-File-Name', file.name)
-          xhr.setRequestHeader('X-Roll-Name', encodeURIComponent(rollName || file.name.replace(/\.zip$/i, '')))
+      const uploadData = await new Promise<{ jobId?: string; error?: string }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('POST', '/api/upload')
 
-          xhr.upload.onprogress = (e) => {
-            setProgress({
-              stage: 'uploading',
-              loaded: bytesConfirmed + e.loaded,
-              total: file.size,
-            })
-          }
+        xhr.upload.onprogress = (e) => {
+          if (!e.lengthComputable) return
+          setProgress({
+            stage: 'uploading',
+            loaded: e.loaded,
+            total: e.total,
+          })
+        }
 
-          xhr.onload = () => {
-            try {
-              const data = JSON.parse(xhr.responseText) as { ok?: boolean; error?: string }
-              if (xhr.status < 300 && data.ok) {
-                bytesConfirmed += chunkSize
-                setProgress({ stage: 'uploading', loaded: bytesConfirmed, total: file.size })
-                resolve()
-              } else {
-                reject(new Error(data.error ?? `Server error on chunk ${i}`))
-              }
-            } catch {
-              reject(new Error(`Unexpected response on chunk ${i}`))
+        xhr.onload = () => {
+          try {
+            const data = JSON.parse(xhr.responseText) as { jobId?: string; error?: string }
+            if (xhr.status < 300 && data.jobId) {
+              setProgress({ stage: 'uploading', loaded: file.size, total: file.size })
+              resolve(data)
+            } else {
+              reject(new Error(data.error ?? 'Upload failed'))
             }
+          } catch {
+            reject(new Error('Unexpected response from upload endpoint'))
           }
+        }
 
-          xhr.onerror = () => reject(new Error(`Network error on chunk ${i} — check your connection`))
-          xhr.ontimeout = () => reject(new Error(`Timeout on chunk ${i}`))
+        xhr.onerror = () => reject(new Error('Network error while uploading — check your connection'))
+        xhr.ontimeout = () => reject(new Error('Upload timed out'))
 
-          xhr.send(chunk)
-        })
-      }
-
-      // ── Phase 2: Assemble chunks into final ZIP ───────────────────────────────
-      setProgress({ stage: 'assembling' })
-
-      const assembleRes = await fetch('/api/upload/assemble', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jobId,
-          totalChunks,
-          fileName: file.name,
-          rollName: rollName || file.name.replace(/\.zip$/i, ''),
-        }),
+        xhr.send(formData)
       })
-      if (!assembleRes.ok) {
-        const data = (await assembleRes.json()) as { error?: string }
-        throw new Error(data.error ?? 'Assembly failed')
-      }
-      const assembleData = (await assembleRes.json()) as { jobId?: string; error?: string }
-      if (!assembleData.jobId) {
-        throw new Error('Assembly response missing jobId')
+
+      if (!uploadData.jobId) {
+        throw new Error('Upload response missing jobId')
       }
 
-      // ── Phase 3: Stream processing progress via SSE ───────────────────────────
+      // ── Stream processing progress via SSE ───────────────────────────────────
       setProgress({ stage: 'extracting', message: 'Opening zip file…' })
 
-      const response = await fetch(`/api/upload/${assembleData.jobId}/process`, {
+      const response = await fetch(`/api/upload/${uploadData.jobId}/process`, {
         headers: { Accept: 'text/event-stream' },
       })
       if (!response.ok || !response.body) {
@@ -375,13 +332,7 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
         </div>
       )}
 
-      {/* ── Assembling chunks ────────────────────────────────────────────────────── */}
-      {progress.stage === 'assembling' && (
-        <div className="flex items-center gap-2.5 py-1 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-          <span>Assembling file on server…</span>
-        </div>
-      )}
+
 
       {/* ── Extracting / opening ZIP ─────────────────────────────────────────────── */}
       {progress.stage === 'extracting' && (
