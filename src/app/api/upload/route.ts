@@ -19,7 +19,7 @@ async function streamToDisk(
   request: NextRequest,
   tmpPath: string,
   contentType: string,
-): Promise<{ rollName: string; fileName: string; bytesWritten: number }> {
+): Promise<{ rollName: string; rollId?: string; fileName: string; bytesWritten: number }> {
   return new Promise((resolve, reject) => {
     let settled = false
     const done = (fn: () => void) => {
@@ -28,6 +28,7 @@ async function streamToDisk(
 
     const bb = busboy({ headers: { 'content-type': contentType } })
     let rollName = ''
+    let rollId: string | undefined
     let fileName = ''
     let bytesWritten = 0
     let fileWritePromise: Promise<void> | null = null
@@ -55,6 +56,10 @@ async function streamToDisk(
 
     bb.on('field', (name, val) => {
       if (name === 'name') rollName = val.trim()
+      if (name === 'rollId') {
+        const trimmed = val.trim()
+        rollId = trimmed || undefined
+      }
     })
 
     bb.on('finish', async () => {
@@ -64,7 +69,7 @@ async function streamToDisk(
           done(() => reject(new UploadError('No file provided')))
           return
         }
-        done(() => resolve({ rollName, fileName, bytesWritten }))
+        done(() => resolve({ rollName, rollId, fileName, bytesWritten }))
       } catch (err) {
         done(() => reject(err))
       }
@@ -115,10 +120,10 @@ export async function POST(request: NextRequest) {
   const { tmpZip, metaFile } = createUploadTempPaths(jobId)
 
   try {
-    const { rollName, fileName, bytesWritten } = await streamToDisk(request, tmpZip, contentType)
+    const { rollName, rollId, fileName, bytesWritten } = await streamToDisk(request, tmpZip, contentType)
 
     // Write job metadata so the processing endpoint can find it
-    await fs.writeFile(metaFile, JSON.stringify({ tmpZip, rollName, fileName }))
+    await fs.writeFile(metaFile, JSON.stringify({ tmpZip, rollName, rollId, fileName }))
 
     console.info(
       '[upload] created temp upload artifacts',

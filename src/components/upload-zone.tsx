@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 
 interface UploadZoneProps {
   onSuccess?: (rollId: string) => void
+  targetRollId?: string
 }
 
 type ProgressState =
@@ -27,7 +28,7 @@ function ProgressBar({ percent }: { percent: number }) {
   )
 }
 
-export function UploadZone({ onSuccess }: UploadZoneProps) {
+export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
   const router = useRouter()
   const [file, setFile] = useState<File | null>(null)
   const [rollName, setRollName] = useState('')
@@ -114,6 +115,9 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('name', rollName || file.name.replace(/\.zip$/i, ''))
+      if (targetRollId) {
+        formData.append('rollId', targetRollId)
+      }
 
       const uploadData = await new Promise<{ jobId?: string; error?: string }>((resolve, reject) => {
         const xhr = new XMLHttpRequest()
@@ -294,22 +298,24 @@ export function UploadZone({ onSuccess }: UploadZoneProps) {
             </button>
           </div>
 
-          <div>
-            <label className="text-sm font-medium text-foreground block mb-1.5">Roll name</label>
-            <input
-              type="text"
-              value={rollName}
-              onChange={(e) => setRollName(e.target.value)}
-              placeholder="e.g. Summer 2024, Roll 12"
-              className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-          </div>
+          {!targetRollId && (
+            <div>
+              <label className="text-sm font-medium text-foreground block mb-1.5">Roll name</label>
+              <input
+                type="text"
+                value={rollName}
+                onChange={(e) => setRollName(e.target.value)}
+                placeholder="e.g. Summer 2024, Roll 12"
+                className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+          )}
 
           <button
             onClick={upload}
             className="w-full py-2.5 rounded-md bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/90 transition-colors"
           >
-            Import Roll
+            {targetRollId ? 'Add Photos' : 'Import Roll'}
           </button>
         </>
       )}

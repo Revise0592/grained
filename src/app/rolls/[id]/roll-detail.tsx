@@ -3,10 +3,11 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, Pencil, Trash2, Camera, Star, ImageIcon, CheckSquare, X, Square, Tag } from 'lucide-react'
+import { ChevronLeft, Pencil, Trash2, Camera, Star, ImageIcon, CheckSquare, X, Square, Tag, Plus } from 'lucide-react'
 import { cn, formatDate, imageUrl } from '@/lib/utils'
 import { Lightbox } from '@/components/lightbox'
 import { Comments } from '@/components/comments'
+import { UploadZone } from '@/components/upload-zone'
 import type { Roll, Photo, RollComment, Tag as PrismaTag } from '@prisma/client'
 
 type RollWithRelations = Roll & {
@@ -28,6 +29,7 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deletingSelected, setDeletingSelected] = useState(false)
+  const [showUploader, setShowUploader] = useState(false)
 
   const enterSelectMode = () => {
     setSelectMode(true)
@@ -147,6 +149,13 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setShowUploader((open) => !open)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors border border-border"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {showUploader ? 'Close uploader' : 'Add photos'}
+            </button>
             <Link
               href={`/rolls/${roll.id}/edit`}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors border border-border"
@@ -188,6 +197,16 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
         {/* Photos tab */}
         {tab === 'photos' && (
           <>
+            {showUploader && (
+              <div className="mb-4 rounded-lg border border-border p-4">
+                <UploadZone
+                  targetRollId={roll.id}
+                  onSuccess={() => {
+                    window.location.assign(`/rolls/${roll.id}`)
+                  }}
+                />
+              </div>
+            )}
             {photos.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 text-center">
                 <ImageIcon className="h-12 w-12 text-muted-foreground/30 mb-3" />

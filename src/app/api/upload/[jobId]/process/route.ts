@@ -41,7 +41,7 @@ export async function GET(
 
       try {
         // ── 1. Load job metadata ──────────────────────────────────────────────
-        let meta: { tmpZip: string; rollName: string; fileName: string }
+        let meta: { tmpZip: string; rollName: string; rollId?: string; fileName: string }
         try {
           meta = JSON.parse(await fs.readFile(metaFile, 'utf-8'))
         } catch {
@@ -85,17 +85,47 @@ export async function GET(
         }
 
         const total = imageEntries.length
-        send({ stage: 'extracting', message: `Found ${total} image${total === 1 ? '' : 's'} — creating roll…` })
+        const existingRollId = meta.rollId?.trim()
+        const roll = existingRollId
+          ? await prisma.roll.findUnique({ where: { id: existingRollId } })
+          : null
 
-        // ── 3. Create Roll in database ────────────────────────────────────────
-        const name =
-          meta.rollName ||
-          meta.fileName.replace(/\.zip$/i, '').replace(/[-_]/g, ' ')
-        const slug = await generateUniqueSlug(name)
-        const roll = await prisma.roll.create({ data: { name, slug } })
+        if (existingRollId && !roll) {
+          send({ stage: 'error', message: 'Target roll was not found. Refresh and try again.' })
+          controller.close()
+          return
+        }
+
+        if (roll) {
+          send({ stage: 'extracting', message: `Found ${total} image${total === 1 ? '' : 's'} — appending to roll…` })
+        } else {
+          send({ stage: 'extracting', message: `Found ${total} image${total === 1 ? '' : 's'} — creating roll…` })
+        }
+
+        // ── 3. Create roll or append to existing ──────────────────────────────
+        const targetRoll = roll ?? await (async () => {
+          const name =
+            meta.rollName ||
+            meta.fileName.replace(/\.zip$/i, '').replace(/[-_]/g, ' ')
+          const slug = await generateUniqueSlug(name)
+          return prisma.roll.create({ data: { name, slug } })
+        })()
+
+        const existingPhotos = await prisma.photo.findMany({
+          where: { rollId: targetRoll.id },
+          select: { order: true, filename: true },
+        })
+        const nextOrderStart =
+          existingPhotos.reduce((maxOrder, photo) => Math.max(maxOrder, photo.order), -1) + 1
+        const nextFilenameStart =
+          existingPhotos.reduce((maxIndex, photo) => {
+            const match = photo.filename.match(/^(\d+)\./)
+            if (!match) return maxIndex
+            return Math.max(maxIndex, Number.parseInt(match[1], 10))
+          }, 0) + 1
 
         const uploadDir = getUploadDir()
-        const rollDir = path.join(uploadDir, roll.id)
+        const rollDir = path.join(uploadDir, targetRoll.id)
         const thumbDir = path.join(rollDir, 'thumbs')
         await fs.mkdir(rollDir, { recursive: true })
         await fs.mkdir(thumbDir, { recursive: true })
@@ -115,7 +145,7 @@ export async function GET(
           const entry = imageEntries[i]
           const originalName = path.basename(entry.entryName)
           const ext = path.extname(originalName).toLowerCase()
-          const filename = `${String(i + 1).padStart(4, '0')}${ext}`
+          const filename = `${String(nextFilenameStart + i).padStart(4, '0')}${ext}`
 
           send({ stage: 'processing', current: i + 1, total, name: originalName })
 
@@ -141,20 +171,20 @@ export async function GET(
           }
 
           photoData.push({
-            rollId: roll.id,
+            rollId: targetRoll.id,
             filename,
             originalName,
-            path: `${roll.id}/${filename}`,
+            path: `${targetRoll.id}/${filename}`,
             width,
             height,
-            order: i,
+            order: nextOrderStart + i,
           })
         }
 
         // ── 5. Persist photos and signal completion ───────────────────────────
         await prisma.photo.createMany({ data: photoData })
 
-        send({ stage: 'done', rollId: roll.id, count: photoData.length })
+        send({ stage: 'done', rollId: targetRoll.id, count: photoData.length })
         try { controller.close() } catch { /* already closed */ }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Processing failed'
