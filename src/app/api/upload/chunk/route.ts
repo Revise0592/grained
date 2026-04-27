@@ -3,6 +3,11 @@ import path from 'path'
 import fs from 'fs/promises'
 import { tmpdir } from 'os'
 import { isLegacyChunkUploadEnabled, pruneStaleUploadTempArtifacts } from '@/lib/upload-temp'
+import {
+  ImportSettingsValidationError,
+  formatImportSettingsValidationError,
+  parseImportSettings,
+} from '@/lib/import-settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +36,9 @@ export async function POST(request: NextRequest) {
   const totalChunks = parseInt(request.headers.get('x-total-chunks') ?? '', 10)
   const fileName = request.headers.get('x-file-name') ?? ''
   const rollName = decodeURIComponent(request.headers.get('x-roll-name') ?? '')
+  const frameNumberStart = request.headers.get('x-frame-number-start') ?? undefined
+  const autoRotationPolicy = request.headers.get('x-auto-rotation-policy') ?? undefined
+  const duplicateHandling = request.headers.get('x-duplicate-handling') ?? undefined
 
   if (!/^[0-9a-f]{32}$/.test(jobId)) {
     return NextResponse.json({ error: 'Invalid job ID' }, { status: 400 })
@@ -46,6 +54,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const settings = parseImportSettings({ frameNumberStart, autoRotationPolicy, duplicateHandling })
     const cleanup = await pruneStaleUploadTempArtifacts()
     if (cleanup.deleted.length > 0) {
       console.info(
@@ -61,7 +70,7 @@ export async function POST(request: NextRequest) {
     if (chunkIndex === 0) {
       await fs.writeFile(
         path.join(chunkDir, 'meta.json'),
-        JSON.stringify({ fileName, rollName, totalChunks }),
+        JSON.stringify({ fileName, rollName, totalChunks, settings }),
       )
     }
 
@@ -84,6 +93,9 @@ export async function POST(request: NextRequest) {
       },
     )
   } catch (err) {
+    if (err instanceof ImportSettingsValidationError) {
+      return NextResponse.json(formatImportSettingsValidationError(err), { status: 400 })
+    }
     const message = err instanceof Error ? err.message : 'Failed to save chunk'
     console.error(`[upload/chunk] error saving chunk ${chunkIndex} for job ${jobId}:`, err)
     return NextResponse.json({ error: message }, { status: 500 })
