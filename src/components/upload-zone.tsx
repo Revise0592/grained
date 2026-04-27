@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { UploadCloud, FileArchive, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react'
+import { UploadCloud, FileArchive, FileImage, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 interface UploadZoneProps {
@@ -30,7 +30,8 @@ function ProgressBar({ percent }: { percent: number }) {
 
 export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
   const router = useRouter()
-  const [file, setFile] = useState<File | null>(null)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [selectionMode, setSelectionMode] = useState<'zip' | 'files' | null>(null)
   const [rollName, setRollName] = useState('')
   const [progress, setProgress] = useState<ProgressState>({ stage: 'idle' })
   const [dragOver, setDragOver] = useState(false)
@@ -44,49 +45,60 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
     progress.stage === 'processing' ||
     progress.stage === 'done'
 
-  const normalizeCandidateFile = (f: File): { file?: File; error?: string } => {
-    if (!f.name.toLowerCase().endsWith('.zip')) {
-      return { error: 'Please select a .zip file' }
-    }
-    // On Linux (Flatpak/Snap browsers, some drag sources) the File object can
-    // arrive with size 0 even when the file is valid — catch it early.
-    if (f.size === 0) {
+  const normalizeCandidates = (candidates: File[]): { files?: File[]; mode?: 'zip' | 'files'; error?: string } => {
+    if (candidates.length === 0) return { error: 'No files selected' }
+
+    const nonEmptyFiles = candidates.filter((f) => f.size > 0)
+    if (nonEmptyFiles.length === 0) {
       return {
         error: 'Could not read the dropped file. Try dragging from your file manager, or use Browse Files.',
       }
     }
-    return { file: f }
+
+    const zipFiles = nonEmptyFiles.filter((f) => f.name.toLowerCase().endsWith('.zip'))
+    const imageFiles = nonEmptyFiles.filter((f) => {
+      const ext = f.name.split('.').pop()?.toLowerCase() ?? ''
+      return ['jpg', 'jpeg', 'png', 'tif', 'tiff', 'webp', 'heic', 'heif'].includes(ext)
+    })
+
+    if (zipFiles.length > 0 && imageFiles.length > 0) {
+      return { error: 'Upload either one .zip or image files, not both.' }
+    }
+
+    if (zipFiles.length > 1) {
+      return { error: 'Please select only one .zip file.' }
+    }
+
+    if (zipFiles.length === 1) {
+      return { files: zipFiles, mode: 'zip' }
+    }
+
+    if (imageFiles.length > 0) {
+      return { files: imageFiles, mode: 'files' }
+    }
+
+    return { error: 'No supported files found. Upload one .zip or image files (JPG, TIFF, PNG, HEIC, WebP).' }
   }
 
   const selectFromCandidates = (candidates: File[]) => {
-    const firstZip = candidates.find((candidate) => candidate.name.toLowerCase().endsWith('.zip'))
-    if (!firstZip) {
-      setProgress({ stage: 'error', message: 'Please select a .zip file' })
-      return
-    }
-
-    const checked = normalizeCandidateFile(firstZip)
-    if (!checked.file) {
+    const checked = normalizeCandidates(candidates)
+    if (!checked.files || !checked.mode) {
       setProgress({ stage: 'error', message: checked.error ?? 'Upload failed' })
       return
     }
-    selectFile(checked.file)
+    selectFiles(checked.files, checked.mode)
   }
 
-  const selectFile = (f: File) => {
-    const checked = normalizeCandidateFile(f)
-    if (!checked.file) {
-      setProgress({
-        stage: 'error',
-        message: checked.error ?? 'Upload failed',
-      })
-      return
-    }
-
-    setFile(checked.file)
+  const selectFiles = (files: File[], mode: 'zip' | 'files') => {
+    setSelectedFiles(files)
+    setSelectionMode(mode)
     setProgress({ stage: 'idle' })
     if (!rollNameRef.current) {
-      setRollName(checked.file.name.replace(/\.zip$/i, '').replace(/[-_]/g, ' '))
+      const defaultName =
+        mode === 'zip'
+          ? files[0].name.replace(/\.zip$/i, '').replace(/[-_]/g, ' ')
+          : `Import ${files.length} photo${files.length === 1 ? '' : 's'}`
+      setRollName(defaultName)
     }
   }
 
@@ -133,19 +145,26 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
   }
 
   const reset = () => {
-    setFile(null)
+    setSelectedFiles([])
+    setSelectionMode(null)
     setRollName('')
     setProgress({ stage: 'idle' })
     if (inputRef.current) inputRef.current.value = ''
   }
 
   const upload = async () => {
-    if (!file || busy) return
+    if (selectedFiles.length === 0 || busy) return
 
     try {
       const formData = new FormData()
-      formData.append('file', file)
-      formData.append('name', rollName || file.name.replace(/\.zip$/i, ''))
+      for (const selectedFile of selectedFiles) {
+        formData.append('file', selectedFile)
+      }
+      const fallbackName =
+        selectionMode === 'zip'
+          ? selectedFiles[0].name.replace(/\.zip$/i, '')
+          : `Import ${selectedFiles.length} photo${selectedFiles.length === 1 ? '' : 's'}`
+      formData.append('name', rollName || fallbackName)
       if (targetRollId) {
         formData.append('rollId', targetRollId)
       }
@@ -167,7 +186,8 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
           try {
             const data = JSON.parse(xhr.responseText) as { jobId?: string; error?: string }
             if (xhr.status < 300 && data.jobId) {
-              setProgress({ stage: 'uploading', loaded: file.size, total: file.size })
+              const totalSize = selectedFiles.reduce((sum, selectedFile) => sum + selectedFile.size, 0)
+              setProgress({ stage: 'uploading', loaded: totalSize, total: totalSize })
               resolve(data)
             } else {
               reject(new Error(data.error ?? 'Upload failed'))
@@ -188,7 +208,7 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
       }
 
       // ── Stream processing progress via SSE ───────────────────────────────────
-      setProgress({ stage: 'extracting', message: 'Opening zip file…' })
+      setProgress({ stage: 'extracting', message: 'Preparing uploaded files…' })
 
       const response = await fetch(`/api/upload/${uploadData.jobId}/process`, {
         headers: { Accept: 'text/event-stream' },
@@ -272,13 +292,14 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
       <input
         ref={inputRef}
         type="file"
-        accept=".zip"
+        accept=".zip,.jpg,.jpeg,.png,.tif,.tiff,.webp,.heic,.heif"
+        multiple
         className="hidden"
         onChange={handleFileChange}
       />
 
       {/* ── Drop zone ────────────────────────────────────────────────────────────── */}
-      {!file && !busy && (
+      {selectedFiles.length === 0 && !busy && (
         <div
           onDrop={handleDrop}
           onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
@@ -297,7 +318,7 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
                 {dragOver ? 'Drop it here' : 'Drag & drop or click to select'}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Supports JPG, TIFF, PNG, HEIC inside a .zip — no size limit
+                Upload one .zip or individual JPG, TIFF, PNG, HEIC, WebP files
               </p>
             </div>
             <button
@@ -311,14 +332,22 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
       )}
 
       {/* ── File selected, ready to import ─────────────────────────────────────── */}
-      {file && progress.stage === 'idle' && (
+      {selectedFiles.length > 0 && progress.stage === 'idle' && (
         <>
           <div className="border border-border rounded-lg p-4 flex items-center gap-3">
-            <FileArchive className="h-8 w-8 text-accent shrink-0" />
+            {selectionMode === 'zip' ? (
+              <FileArchive className="h-8 w-8 text-accent shrink-0" />
+            ) : (
+              <FileImage className="h-8 w-8 text-accent shrink-0" />
+            )}
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
+              <p className="text-sm font-medium text-foreground truncate">
+                {selectionMode === 'zip'
+                  ? selectedFiles[0].name
+                  : `${selectedFiles.length} image file${selectedFiles.length === 1 ? '' : 's'} selected`}
+              </p>
               <p className="text-xs text-muted-foreground">
-                {(file.size / 1024 / 1024).toFixed(1)} MB
+                {(selectedFiles.reduce((sum, selectedFile) => sum + selectedFile.size, 0) / 1024 / 1024).toFixed(1)} MB
               </p>
             </div>
             <button
