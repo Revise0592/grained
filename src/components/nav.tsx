@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { Plus, Film, LogOut, BookOpen, Settings } from 'lucide-react'
-import { ThemeToggle } from './theme-toggle'
 
 export function Nav({ authEnabled }: { authEnabled?: boolean }) {
   const pathname = usePathname()
@@ -27,7 +26,6 @@ export function Nav({ authEnabled }: { authEnabled?: boolean }) {
 
 {/* Actions */}
         <div className="flex items-center gap-1">
-          <ThemeToggle />
           <Link
             href="/library"
             title="Library"
