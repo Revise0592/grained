@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback, useState } from 'react'
 import { X, ChevronLeft, ChevronRight, MessageSquare, Pencil, Check, RotateCcw, RotateCw, Trash2, ChevronUp, ChevronDown } from 'lucide-react'
-import { cn, imageUrl, formatDate } from '@/lib/utils'
+import { cn, imageUrl, formatDate, thumbPath } from '@/lib/utils'
 import type { Photo, PhotoComment } from '@prisma/client'
 import { Comments } from './comments'
 
@@ -132,8 +132,7 @@ export function Lightbox({ photos, initialIndex, onClose, onDelete, onRotate, ro
   if (!current) return null
 
   const thumbUrl = (p: Photo) => {
-    const parts = p.path.split('/')
-    return `/api/images/${parts[0]}/thumbs/${parts.slice(1).join('/')}`
+    return `/api/images/${thumbPath(p.path)}`
   }
 
   const isTransverse = localRotation === 90 || localRotation === 270

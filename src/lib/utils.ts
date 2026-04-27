@@ -25,10 +25,21 @@ export function slugify(str: string): string {
 
 export function imageUrl(path: string, thumb = false): string {
   if (thumb) {
-    const parts = path.split('/')
-    return `/api/images/${parts[0]}/thumbs/${parts.slice(1).join('/')}`
+    return `/api/images/${thumbPath(path)}`
   }
   return `/api/images/${path}`
+}
+
+export function thumbPath(path: string): string {
+  const parts = path.split('/')
+  const rollId = parts[0]
+  const filename = parts.slice(1).join('/')
+  const ext = filename.split('.').pop()
+  const thumbName = ext
+    ? filename.slice(0, Math.max(0, filename.length - ext.length - 1)) + '.jpg'
+    : `${filename}.jpg`
+
+  return `${rollId}/thumbs/${thumbName}`
 }
 
 export const IMAGE_EXTENSIONS = new Set([
