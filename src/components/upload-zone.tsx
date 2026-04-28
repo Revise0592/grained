@@ -331,7 +331,7 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
   ) => {
     const chunkSize = 8 * 1024 * 1024
     const totalChunks = Math.ceil(zipFile.size / chunkSize)
-    const jobId = crypto.randomUUID().replace(/-/g, '')
+    const jobId = createClientJobId()
     let loaded = 0
 
     for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
@@ -596,3 +596,15 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
     </div>
   )
 }
+  const createClientJobId = () => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID().replace(/-/g, '')
+    }
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+      const bytes = new Uint8Array(16)
+      crypto.getRandomValues(bytes)
+      return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
+    }
+    const randomHex = () => Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0')
+    return `${randomHex()}${randomHex()}${randomHex()}${randomHex()}`.slice(0, 32)
+  }
