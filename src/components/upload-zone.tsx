@@ -227,74 +227,157 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
         throw new Error('Upload response missing jobId')
       }
 
-      // ── Stream processing progress via SSE ───────────────────────────────────
-      setProgress({ stage: 'extracting', message: 'Preparing uploaded files…' })
-
-      const response = await fetch(`/api/upload/${uploadData.jobId}/process`, {
-        headers: { Accept: 'text/event-stream' },
-      })
-      if (!response.ok || !response.body) {
-        throw new Error('Failed to start processing stream')
-      }
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      outer: while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-
-        // SSE events are separated by double newlines
-        const parts = buffer.split('\n\n')
-        buffer = parts.pop() ?? ''
-
-        for (const part of parts) {
-          const line = part.trim()
-          if (!line.startsWith('data: ')) continue
-
-          let event: {
-            stage: string
-            message?: string
-            current?: number
-            total?: number
-            name?: string
-            rollId?: string
-            count?: number
-          }
-          try {
-            event = JSON.parse(line.slice(6))
-          } catch {
-            continue
-          }
-
-          if (event.stage === 'extracting') {
-            setProgress({ stage: 'extracting', message: event.message ?? 'Extracting…' })
-          } else if (event.stage === 'processing') {
-            setProgress({
-              stage: 'processing',
-              current: event.current!,
-              total: event.total!,
-              name: event.name ?? '',
-            })
-          } else if (event.stage === 'done') {
-            setProgress({ stage: 'done', rollId: event.rollId!, count: event.count! })
-            if (onSuccess) {
-              onSuccess(event.rollId!)
-            } else {
-              router.push(`/rolls/${event.rollId}`)
-            }
-            break outer
-          } else if (event.stage === 'error') {
-            throw new Error(event.message ?? 'Processing failed')
-          }
+      await processJob(uploadData.jobId)
+    } catch (err) {
+      const fallbackError = err instanceof Error ? err : new Error('Upload failed')
+      if (selectionMode === 'zip' && selectedFiles.length === 1) {
+        try {
+          const jobId = await uploadZipViaChunkFallback(selectedFiles[0], {
+            rollName: rollName || selectedFiles[0].name.replace(/\.zip$/i, ''),
+            frameNumberStart,
+            autoRotationPolicy,
+            duplicateHandling,
+          }, (loaded, total) => {
+            setProgress({ stage: 'uploading', loaded, total })
+          })
+          await processJob(jobId)
+          return
+        } catch (fallbackErr) {
+          const combined = fallbackErr instanceof Error
+            ? `${fallbackError.message} (fallback failed: ${fallbackErr.message})`
+            : `${fallbackError.message} (fallback failed)`
+          setProgress({ stage: 'error', message: combined })
+          return
         }
       }
-    } catch (err) {
-      setProgress({ stage: 'error', message: err instanceof Error ? err.message : 'Upload failed' })
+      setProgress({ stage: 'error', message: fallbackError.message })
     }
+  }
+
+  const processJob = async (jobId: string) => {
+    setProgress({ stage: 'extracting', message: 'Preparing uploaded files…' })
+
+    const response = await fetch(`/api/upload/${jobId}/process`, {
+      headers: { Accept: 'text/event-stream' },
+    })
+    if (!response.ok || !response.body) {
+      throw new Error('Failed to start processing stream')
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    outer: while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const parts = buffer.split('\n\n')
+      buffer = parts.pop() ?? ''
+
+      for (const part of parts) {
+        const line = part.trim()
+        if (!line.startsWith('data: ')) continue
+
+        let event: {
+          stage: string
+          message?: string
+          current?: number
+          total?: number
+          name?: string
+          rollId?: string
+          count?: number
+        }
+        try {
+          event = JSON.parse(line.slice(6))
+        } catch {
+          continue
+        }
+
+        if (event.stage === 'extracting') {
+          setProgress({ stage: 'extracting', message: event.message ?? 'Extracting…' })
+        } else if (event.stage === 'processing') {
+          setProgress({
+            stage: 'processing',
+            current: event.current!,
+            total: event.total!,
+            name: event.name ?? '',
+          })
+        } else if (event.stage === 'done') {
+          setProgress({ stage: 'done', rollId: event.rollId!, count: event.count! })
+          if (onSuccess) {
+            onSuccess(event.rollId!)
+          } else {
+            router.push(`/rolls/${event.rollId}`)
+          }
+          break outer
+        } else if (event.stage === 'error') {
+          throw new Error(event.message ?? 'Processing failed')
+        }
+      }
+    }
+  }
+
+  const uploadZipViaChunkFallback = async (
+    zipFile: File,
+    options: {
+      rollName: string
+      frameNumberStart: string
+      autoRotationPolicy: string
+      duplicateHandling: string
+    },
+    onProgress: (loaded: number, total: number) => void,
+  ) => {
+    const chunkSize = 8 * 1024 * 1024
+    const totalChunks = Math.ceil(zipFile.size / chunkSize)
+    const jobId = crypto.randomUUID().replace(/-/g, '')
+    let loaded = 0
+
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+      const start = chunkIndex * chunkSize
+      const end = Math.min(start + chunkSize, zipFile.size)
+      const chunk = zipFile.slice(start, end)
+      const response = await fetch('/api/upload/chunk', {
+        method: 'POST',
+        headers: {
+          'x-job-id': jobId,
+          'x-chunk-index': String(chunkIndex),
+          'x-total-chunks': String(totalChunks),
+          'x-file-name': zipFile.name,
+          'x-roll-name': encodeURIComponent(options.rollName),
+          'x-frame-number-start': options.frameNumberStart,
+          'x-auto-rotation-policy': options.autoRotationPolicy,
+          'x-duplicate-handling': options.duplicateHandling,
+        },
+        body: await chunk.arrayBuffer(),
+      })
+      const result = await response.json().catch(() => ({} as { error?: string }))
+      if (!response.ok) {
+        throw new Error(result.error ?? 'Chunk upload failed')
+      }
+      loaded = end
+      onProgress(loaded, zipFile.size)
+    }
+
+    const assembleResponse = await fetch('/api/upload/assemble', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        totalChunks,
+        fileName: zipFile.name,
+        rollName: options.rollName,
+        frameNumberStart: options.frameNumberStart || undefined,
+        autoRotationPolicy: options.autoRotationPolicy,
+        duplicateHandling: options.duplicateHandling,
+      }),
+    })
+    const assembled = await assembleResponse.json().catch(() => ({} as { jobId?: string; error?: string }))
+    if (!assembleResponse.ok || !assembled.jobId) {
+      throw new Error(assembled.error ?? 'Failed to assemble zip upload')
+    }
+    return assembled.jobId
   }
 
   // Derived display values

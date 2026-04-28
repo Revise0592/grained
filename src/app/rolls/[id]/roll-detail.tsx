@@ -32,6 +32,7 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
   const [deletingSelected, setDeletingSelected] = useState(false)
   const [showUploader, setShowUploader] = useState(false)
   const [requireDeleteConfirmation, setRequireDeleteConfirmation] = useState(true)
+  const [debugRotation, setDebugRotation] = useState(false)
 
   useEffect(() => {
     fetch('/api/settings')
@@ -40,6 +41,11 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
         setRequireDeleteConfirmation(settings.dataSafety.requireDeleteConfirmation)
       })
       .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    setDebugRotation(params.get('debugRotation') === '1')
   }, [])
 
   const enterSelectMode = () => {
@@ -281,9 +287,11 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
                   {photos.map((photo, i) => (
                     <PhotoTile
                       key={photo.id}
+                      index={i}
                       photo={photo}
                       isCover={photo.id === coverPhotoId}
                       thumbUrl={thumbUrl(photo)}
+                      debugRotation={debugRotation}
                       selectMode={selectMode}
                       selected={selected.has(photo.id)}
                       onClick={() => {
@@ -350,6 +358,7 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
       {lightboxIndex !== null && photos.length > 0 && (
         <Lightbox
           photos={photos}
+          debugRotation={debugRotation}
           initialIndex={Math.min(lightboxIndex, photos.length - 1)}
           onClose={() => setLightboxIndex(null)}
           onDelete={handleLightboxDelete}
@@ -362,15 +371,17 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
 }
 
 function PhotoTile({
-  photo, isCover, thumbUrl, selectMode, selected, onClick, onSetCover,
+  photo, index, isCover, thumbUrl, selectMode, selected, onClick, onSetCover, debugRotation,
 }: {
   photo: Photo
+  index: number
   isCover: boolean
   thumbUrl: string
   selectMode: boolean
   selected: boolean
   onClick: () => void
   onSetCover: () => void
+  debugRotation: boolean
 }) {
   const rotation = photo.rotation ?? 0
   const isTransverse = rotation === 90 || rotation === 270
@@ -432,6 +443,13 @@ function PhotoTile({
           >
             <Star className="h-3.5 w-3.5" fill={isCover ? 'currentColor' : 'none'} />
           </button>
+        </div>
+      )}
+      {debugRotation && (
+        <div className="absolute top-1 right-1 text-[10px] leading-tight font-mono bg-black/70 text-lime-300 px-1.5 py-1 rounded pointer-events-none">
+          <div>i:{index}</div>
+          <div>r:{rotation}</div>
+          <div>id:{photo.id.slice(-6)}</div>
         </div>
       )}
     </div>

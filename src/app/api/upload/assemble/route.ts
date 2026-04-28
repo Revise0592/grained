@@ -3,7 +3,6 @@ import path from 'path'
 import fs from 'fs/promises'
 import { createWriteStream } from 'fs'
 import { tmpdir } from 'os'
-import { isLegacyChunkUploadEnabled } from '@/lib/upload-temp'
 import {
   ImportSettings,
   ImportSettingsValidationError,
@@ -14,26 +13,7 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-/**
- * Deprecated fallback endpoint.
- *
- * Primary ingestion now happens through POST /api/upload as multipart streaming.
- * Keep this route only for legacy clients while ENABLE_LEGACY_CHUNK_UPLOAD is enabled.
- */
 export async function POST(request: NextRequest) {
-  if (!isLegacyChunkUploadEnabled()) {
-    return NextResponse.json(
-      { error: 'Legacy assembly is disabled. Use POST /api/upload instead.' },
-      {
-        status: 410,
-        headers: {
-          'X-Upload-Path': '/api/upload',
-          'X-Deprecated-Endpoint': 'true',
-        },
-      },
-    )
-  }
-
   let body: {
     jobId?: unknown
     totalChunks?: unknown

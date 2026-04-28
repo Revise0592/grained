@@ -57,7 +57,7 @@ const MAX_ZIP_TOTAL_BYTES = 750 * 1024 * 1024
 
 function openZipFile(filePath: string) {
   return new Promise<yauzl.ZipFile>((resolve, reject) => {
-    yauzl.open(filePath, { lazyEntries: true }, (err, zipFile) => {
+    yauzl.open(filePath, { lazyEntries: true, autoClose: false, decodeStrings: false }, (err, zipFile) => {
       if (err || !zipFile) return reject(err ?? new Error('Unable to open zip file'))
       resolve(zipFile)
     })
@@ -73,6 +73,13 @@ function readZipEntryStream(zipFile: yauzl.ZipFile, entry: yauzl.Entry) {
   })
 }
 
+function getZipEntryFileName(entry: yauzl.Entry) {
+  const value = (entry as unknown as { fileName: string | Buffer }).fileName
+  if (typeof value === 'string') return value
+  if (Buffer.isBuffer(value)) return value.toString('utf8')
+  return String(value)
+}
+
 function normalizeAndValidateZipEntryName(entryName: string) {
   const normalized = entryName.replace(/\\/g, '/')
   if (!normalized || normalized.includes('\0') || normalized.startsWith('/')) return null
@@ -82,6 +89,14 @@ function normalizeAndValidateZipEntryName(entryName: string) {
     entryName: segments.join('/'),
     basename: segments[segments.length - 1],
   }
+}
+
+function looksLikeDirectoryEntry(entry: yauzl.Entry) {
+  if (/\/$/.test(getZipEntryFileName(entry))) return true
+  // DOS directory attribute bit; some zippers omit trailing slash.
+  const dosDirectoryBit = 0x10
+  const externalAttrs = entry.externalFileAttributes >>> 0
+  return (externalAttrs & dosDirectoryBit) !== 0
 }
 
 async function writeZipEntryToTempFile(
@@ -137,11 +152,19 @@ async function collectZipImageFiles(
       zipFile!.on('error', reject)
       zipFile!.on('entry', (entry) => {
         totalEntries += 1
-        const isDirectory = /\/$/.test(entry.fileName)
+        const entryFileName = getZipEntryFileName(entry)
+        const isDirectory = looksLikeDirectoryEntry(entry)
         if (!isDirectory) {
-          const safeName = normalizeAndValidateZipEntryName(entry.fileName)
+          const safeName = normalizeAndValidateZipEntryName(entryFileName)
           if (!safeName) {
-            reject(new Error(`Zip contains invalid or unsafe entry path: "${entry.fileName}"`))
+            const normalizedRaw = entryFileName.replace(/\\/g, '/')
+            const rawBase = normalizedRaw.split('/').filter(Boolean).pop() ?? normalizedRaw
+            if (isImageFile(rawBase)) {
+              reject(new Error(`Zip contains invalid or unsafe image path: "${entryFileName}"`))
+              return
+            }
+            // Ignore invalid non-image paths from archive metadata/noise.
+            zipFile!.readEntry()
             return
           }
           if (safeName.basename.startsWith('.') || safeName.basename.startsWith('__')) {
@@ -369,7 +392,8 @@ async function persistPhotos(
     const decodeStart = Date.now()
     const inputPipeline = sharp(image.inputPath, { limitInputPixels: MAX_INPUT_PIXELS })
     const shouldRotate = settings.autoRotationPolicy !== 'off'
-    const outputPipeline = settings.autoRotationPolicy === 'force-upright' ? inputPipeline.rotate() : inputPipeline
+    // Keep originals and thumbnails orientation-normalized the same way to avoid viewer/grid drift.
+    const outputPipeline = shouldRotate ? inputPipeline.rotate() : inputPipeline
     let outputInfo: sharp.OutputInfo | null = null
     try {
       outputInfo = await outputPipeline.toFile(path.join(rollDir, filename))
@@ -604,6 +628,12 @@ export async function GET(
         try { controller.close() } catch { }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Processing failed'
+        console.error('[upload/process] failed', {
+          jobId,
+          mode: tmpZip ? 'zip' : 'files',
+          message,
+          raw: err instanceof Error ? err.stack : String(err),
+        })
         send({ stage: 'error', message })
         try { controller.close() } catch { }
       } finally {

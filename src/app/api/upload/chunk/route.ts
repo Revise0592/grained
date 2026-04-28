@@ -4,7 +4,7 @@ import fs from 'fs/promises'
 import { tmpdir } from 'os'
 import { prisma } from '@/lib/db'
 import { DEFAULT_APP_SETTINGS, mapDbAppSettings } from '@/lib/settings'
-import { isLegacyChunkUploadEnabled, pruneStaleUploadTempArtifacts } from '@/lib/upload-temp'
+import { pruneStaleUploadTempArtifacts } from '@/lib/upload-temp'
 import {
   ImportSettingsValidationError,
   formatImportSettingsValidationError,
@@ -22,26 +22,7 @@ async function getUploadTempTtlMs() {
   return hours * 60 * 60 * 1000
 }
 
-/**
- * Deprecated fallback endpoint.
- *
- * Primary ingestion now happens through POST /api/upload as multipart streaming.
- * Keep this route only for legacy clients while ENABLE_LEGACY_CHUNK_UPLOAD is enabled.
- */
 export async function POST(request: NextRequest) {
-  if (!isLegacyChunkUploadEnabled()) {
-    return NextResponse.json(
-      { error: 'Legacy chunk upload is disabled. Use POST /api/upload instead.' },
-      {
-        status: 410,
-        headers: {
-          'X-Upload-Path': '/api/upload',
-          'X-Deprecated-Endpoint': 'true',
-        },
-      },
-    )
-  }
-
   const jobId = request.headers.get('x-job-id') ?? ''
   const chunkIndex = parseInt(request.headers.get('x-chunk-index') ?? '', 10)
   const totalChunks = parseInt(request.headers.get('x-total-chunks') ?? '', 10)

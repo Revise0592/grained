@@ -12,6 +12,7 @@ type PhotoWithComments = Photo & { comments: PhotoComment[] }
 interface LightboxProps {
   photos: Photo[]
   initialIndex: number
+  debugRotation?: boolean
   onClose: () => void
   onDelete?: (photoId: string) => void
   onRotate?: (photoId: string, rotation: number) => void
@@ -22,7 +23,7 @@ interface LightboxProps {
   }
 }
 
-export function Lightbox({ photos, initialIndex, onClose, onDelete, onRotate, rollInfo }: LightboxProps) {
+export function Lightbox({ photos, initialIndex, debugRotation = false, onClose, onDelete, onRotate, rollInfo }: LightboxProps) {
   const [index, setIndex] = useState(initialIndex)
   const [photo, setPhoto] = useState<PhotoWithComments | null>(null)
   const [editing, setEditing] = useState(false)
@@ -73,15 +74,17 @@ export function Lightbox({ photos, initialIndex, onClose, onDelete, onRotate, ro
 
   useEffect(() => {
     if (!current) return
+    const controller = new AbortController()
+    const currentId = current.id
     setPhoto(null)
     setEditing(false)
     setMobilePanel(false)
     setLocalRotation(current.rotation ?? 0)
-    fetch(`/api/photos/${current.id}`)
+    fetch(`/api/photos/${current.id}?_=${Date.now()}`, { signal: controller.signal, cache: 'no-store' })
       .then(r => r.json())
       .then((p: PhotoWithComments) => {
+        if (currentId !== p.id) return
         setPhoto(p)
-        setLocalRotation(p.rotation ?? 0)
         setForm({
           frameNumber: p.frameNumber?.toString() ?? '',
           shutterSpeed: p.shutterSpeed ?? '',
@@ -91,6 +94,14 @@ export function Lightbox({ photos, initialIndex, onClose, onDelete, onRotate, ro
           notes: p.notes ?? '',
         })
       })
+      .catch((err) => {
+        if (!(err instanceof DOMException && err.name === 'AbortError')) {
+          console.error('[lightbox] failed to load photo details', err)
+        }
+      })
+    return () => {
+      controller.abort()
+    }
   }, [current?.id])
 
   const rotate = async (dir: 'cw' | 'ccw') => {
@@ -102,6 +113,7 @@ export function Lightbox({ photos, initialIndex, onClose, onDelete, onRotate, ro
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rotation: next }),
     })
+    setPhoto(prev => prev ? { ...prev, rotation: next } : prev)
     onRotate?.(current.id, next)
   }
 
@@ -214,6 +226,11 @@ export function Lightbox({ photos, initialIndex, onClose, onDelete, onRotate, ro
           {index + 1} / {photos.length}
           {photo?.frameNumber != null && <span className="ml-2 hidden sm:inline">· Frame {photo.frameNumber}</span>}
         </span>
+        {debugRotation && (
+          <span className="text-xs text-lime-300 font-mono">
+            i:{index} r:{localRotation} id:{current.id.slice(-6)}
+          </span>
+        )}
 
         <div className="flex items-center gap-0.5">
           <button onClick={() => rotate('ccw')} title="Rotate left" className="p-2 rounded-md text-white/50 hover:text-white hover:bg-white/10 transition-colors">
