@@ -1,9 +1,12 @@
 import { NextRequest } from 'next/server'
-import AdmZip from 'adm-zip'
 import path from 'path'
 import fs from 'fs/promises'
+import { createWriteStream } from 'fs'
+import { Readable } from 'stream'
 import { tmpdir } from 'os'
+import { randomBytes } from 'crypto'
 import sharp from 'sharp'
+import yauzl from 'yauzl'
 import { prisma } from '@/lib/db'
 import { isImageFile, getUploadDir } from '@/lib/utils'
 import { generateUniqueSlug } from '@/lib/server-utils'
@@ -38,13 +41,164 @@ type UploadMeta = {
 
 type SourceImage = {
   originalName: string
-  readBuffer: () => Promise<Buffer>
+  inputPath: string
 }
 
 type EffectiveImportSettings = {
   frameNumberStart?: number
   autoRotationPolicy: AutoRotationPolicy
   duplicateHandling: DuplicateHandlingPolicy
+}
+
+const MAX_PARALLEL_IMAGE_WORK = 3
+const MAX_INPUT_PIXELS = 100_000_000
+const MAX_ZIP_ENTRY_BYTES = 100 * 1024 * 1024
+const MAX_ZIP_TOTAL_BYTES = 750 * 1024 * 1024
+
+function openZipFile(filePath: string) {
+  return new Promise<yauzl.ZipFile>((resolve, reject) => {
+    yauzl.open(filePath, { lazyEntries: true }, (err, zipFile) => {
+      if (err || !zipFile) return reject(err ?? new Error('Unable to open zip file'))
+      resolve(zipFile)
+    })
+  })
+}
+
+function readZipEntryStream(zipFile: yauzl.ZipFile, entry: yauzl.Entry) {
+  return new Promise<Readable>((resolve, reject) => {
+    zipFile.openReadStream(entry, (err, stream) => {
+      if (err || !stream) return reject(err ?? new Error('Unable to read zip entry'))
+      resolve(stream as Readable)
+    })
+  })
+}
+
+function normalizeAndValidateZipEntryName(entryName: string) {
+  const normalized = entryName.replace(/\\/g, '/')
+  if (!normalized || normalized.includes('\0') || normalized.startsWith('/')) return null
+  const segments = normalized.split('/').filter(Boolean)
+  if (segments.length === 0 || segments.includes('..')) return null
+  return {
+    entryName: segments.join('/'),
+    basename: segments[segments.length - 1],
+  }
+}
+
+async function writeZipEntryToTempFile(
+  zipFile: yauzl.ZipFile,
+  entry: yauzl.Entry,
+  maxBytes: number,
+) {
+  const stream = await readZipEntryStream(zipFile, entry)
+  const tmpPath = path.join(tmpdir(), `grained-zip-entry-${randomBytes(12).toString('hex')}`)
+  const out = createWriteStream(tmpPath, { flags: 'wx' })
+
+  let written = 0
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const rejectOnce = (error: Error) => {
+        stream.destroy(error)
+        out.destroy(error)
+        reject(error)
+      }
+      stream.on('data', (chunk: Buffer) => {
+        written += chunk.length
+        if (written > maxBytes) {
+          rejectOnce(new Error(`Zip entry exceeds limit of ${maxBytes} bytes`))
+        }
+      })
+      stream.on('error', reject)
+      out.on('error', reject)
+      out.on('finish', resolve)
+      stream.pipe(out)
+    })
+  } catch (error) {
+    await fs.unlink(tmpPath).catch(() => {})
+    throw error
+  }
+
+  return { tmpPath, bytesWritten: written }
+}
+
+async function collectZipImageFiles(
+  tmpZip: string,
+  send: (data: object) => void,
+) {
+  let zipFile: yauzl.ZipFile | null = null
+  const tempPaths: string[] = []
+  let totalExtractedBytes = 0
+
+  try {
+    zipFile = await openZipFile(tmpZip)
+    const imageEntries: Array<{ entry: yauzl.Entry; originalName: string; entryName: string }> = []
+    let totalEntries = 0
+
+    await new Promise<void>((resolve, reject) => {
+      zipFile!.on('error', reject)
+      zipFile!.on('entry', (entry) => {
+        totalEntries += 1
+        const isDirectory = /\/$/.test(entry.fileName)
+        if (!isDirectory) {
+          const safeName = normalizeAndValidateZipEntryName(entry.fileName)
+          if (!safeName) {
+            reject(new Error(`Zip contains invalid or unsafe entry path: "${entry.fileName}"`))
+            return
+          }
+          if (safeName.basename.startsWith('.') || safeName.basename.startsWith('__')) {
+            zipFile!.readEntry()
+            return
+          }
+          if (isImageFile(safeName.basename)) {
+            if (entry.uncompressedSize > MAX_ZIP_ENTRY_BYTES) {
+              reject(new Error(`Zip entry "${safeName.basename}" exceeds per-file extraction limit`))
+              return
+            }
+            imageEntries.push({
+              entry,
+              originalName: safeName.basename,
+              entryName: safeName.entryName,
+            })
+          }
+        }
+        zipFile!.readEntry()
+      })
+      zipFile!.on('end', resolve)
+      zipFile!.readEntry()
+    })
+
+    imageEntries.sort((a, b) => a.entryName.localeCompare(b.entryName))
+    if (imageEntries.length === 0) {
+      return { sourceImages: [] as SourceImage[], tempPaths, totalEntries }
+    }
+
+    send({
+      stage: 'extracting',
+      message: `Found ${imageEntries.length} image${imageEntries.length === 1 ? '' : 's'} — creating roll…`,
+    })
+
+    const sourceImages: SourceImage[] = []
+    for (let i = 0; i < imageEntries.length; i++) {
+      const item = imageEntries[i]
+      const { tmpPath, bytesWritten } = await writeZipEntryToTempFile(zipFile, item.entry, MAX_ZIP_ENTRY_BYTES)
+      totalExtractedBytes += bytesWritten
+      if (totalExtractedBytes > MAX_ZIP_TOTAL_BYTES) {
+        throw new Error('Zip exceeds total extraction limit')
+      }
+      tempPaths.push(tmpPath)
+      sourceImages.push({
+        originalName: item.originalName,
+        inputPath: tmpPath,
+      })
+      send({
+        stage: 'extracting',
+        message: `Extracting images… (${i + 1}/${imageEntries.length})`,
+      })
+    }
+
+    return { sourceImages, tempPaths, totalEntries }
+  } finally {
+    zipFile?.close()
+  }
 }
 
 function makeUniqueOriginalName(name: string, used: Set<string>) {
@@ -57,6 +211,26 @@ function makeUniqueOriginalName(name: string, used: Set<string>) {
     candidate = `${base} (${counter})${ext}`
   }
   return candidate
+}
+
+async function runWithConcurrencyLimit<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<void>,
+) {
+  const safeLimit = Math.max(1, limit)
+  let index = 0
+
+  async function consume() {
+    while (true) {
+      const nextIndex = index
+      index += 1
+      if (nextIndex >= items.length) return
+      await worker(items[nextIndex])
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(safeLimit, items.length) }, () => consume()))
 }
 
 async function persistPhotos(
@@ -149,6 +323,15 @@ async function persistPhotos(
   await fs.mkdir(thumbDir, { recursive: true })
 
   let createdCount = 0
+  const plannedImages: Array<{
+    sourceIndex: number
+    createdIndex: number
+    image: SourceImage
+    existing: { id: string; originalName: string; filename: string; order: number } | undefined
+    originalName: string
+    filename: string
+    safeExt: string
+  }> = []
 
   for (let i = 0; i < total; i++) {
     const image = sourceImages[i]
@@ -166,32 +349,62 @@ async function persistPhotos(
     const ext = path.extname(image.originalName).toLowerCase()
     const safeExt = ext || '.jpg'
     const filename = `${String(nextFilenameStart + createdCount).padStart(4, '0')}${safeExt}`
+    plannedImages.push({
+      sourceIndex: i,
+      createdIndex: createdCount,
+      image,
+      existing,
+      originalName,
+      filename,
+      safeExt,
+    })
+    createdCount += 1
+  }
 
-    send({ stage: 'processing', current: i + 1, total, name: image.originalName })
+  await runWithConcurrencyLimit(plannedImages, MAX_PARALLEL_IMAGE_WORK, async (plan) => {
+    const { sourceIndex, createdIndex, image, existing, originalName, filename, safeExt } = plan
+    const phaseStart = Date.now()
+    send({ stage: 'processing', current: sourceIndex + 1, total, name: image.originalName })
 
-    const imgBuffer = await image.readBuffer()
-    const outputBuffer =
-      settings.autoRotationPolicy === 'force-upright'
-        ? await sharp(imgBuffer).rotate().toBuffer()
-        : imgBuffer
-    await fs.writeFile(path.join(rollDir, filename), outputBuffer)
+    const decodeStart = Date.now()
+    const inputPipeline = sharp(image.inputPath, { limitInputPixels: MAX_INPUT_PIXELS })
+    const shouldRotate = settings.autoRotationPolicy !== 'off'
+    const outputPipeline = settings.autoRotationPolicy === 'force-upright' ? inputPipeline.rotate() : inputPipeline
+    let outputInfo: sharp.OutputInfo | null = null
+    try {
+      outputInfo = await outputPipeline.toFile(path.join(rollDir, filename))
+    } catch {
+      await fs.copyFile(image.inputPath, path.join(rollDir, filename))
+    }
+    const decodeMs = Date.now() - decodeStart
+    console.info(
+      `[persistPhotos] decode/write ${sourceIndex + 1}/${total} "${image.originalName}" ${decodeMs}ms`,
+    )
 
     let width: number | null = null
     let height: number | null = null
 
     try {
-      const pipeline = settings.autoRotationPolicy === 'off'
-        ? sharp(outputBuffer)
-        : sharp(outputBuffer).rotate()
-      const imgMeta = await pipeline.clone().metadata()
-      width = imgMeta.width ?? null
-      height = imgMeta.height ?? null
+      if (outputInfo?.width && outputInfo?.height) {
+        width = outputInfo.width
+        height = outputInfo.height
+      } else {
+        const metaPipeline = sharp(image.inputPath, { limitInputPixels: MAX_INPUT_PIXELS })
+        const meta = await (shouldRotate ? metaPipeline.rotate() : metaPipeline).metadata()
+        width = meta.width ?? null
+        height = meta.height ?? null
+      }
 
-      await pipeline
-        .clone()
+      const thumbStart = Date.now()
+      const thumbPipeline = sharp(image.inputPath, { limitInputPixels: MAX_INPUT_PIXELS })
+      await (shouldRotate ? thumbPipeline.rotate() : thumbPipeline)
         .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: 82 })
         .toFile(path.join(thumbDir, `${path.basename(filename, safeExt)}.jpg`))
+      const thumbMs = Date.now() - thumbStart
+      console.info(
+        `[persistPhotos] thumbnail ${sourceIndex + 1}/${total} "${image.originalName}" ${thumbMs}ms`,
+      )
     } catch {
       // Sharp can't process this format — continue without thumbnail
     }
@@ -202,8 +415,8 @@ async function persistPhotos(
       path: `${roll.id}/${filename}`,
       width,
       height,
-      order: existing && settings.duplicateHandling === 'replace' ? existing.order : nextOrderStart + createdCount,
-      frameNumber: frameStart + createdCount,
+      order: existing && settings.duplicateHandling === 'replace' ? existing.order : nextOrderStart + createdIndex,
+      frameNumber: frameStart + createdIndex,
     }
 
     if (existing && settings.duplicateHandling === 'replace') {
@@ -225,8 +438,11 @@ async function persistPhotos(
         },
       })
     }
-    createdCount += 1
-  }
+    const totalMs = Date.now() - phaseStart
+    console.info(
+      `[persistPhotos] complete ${sourceIndex + 1}/${total} "${image.originalName}" ${totalMs}ms`,
+    )
+  })
   return { rollId: roll.id, count: createdCount, appended: Boolean(existingRoll) }
 }
 
@@ -317,42 +533,29 @@ export async function GET(
           }
 
           send({ stage: 'extracting', message: 'Opening zip file…' })
-
-          let zip: AdmZip
+          let zipImages
           try {
-            zip = new AdmZip(meta.tmpZip)
-          } catch {
-            send({ stage: 'error', message: 'Could not read zip — the file may be corrupt or not a valid zip.' })
+            zipImages = await collectZipImageFiles(meta.tmpZip, send)
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'Could not read zip — the file may be corrupt or not a valid zip.'
+            send({ stage: 'error', message })
             controller.close()
             return
           }
 
-          const allEntries = zip.getEntries()
-          const imageEntries = allEntries
-            .filter((entry) => {
-              const name = path.basename(entry.entryName)
-              return !name.startsWith('.') && !name.startsWith('__') && isImageFile(name)
-            })
-            .sort((a, b) => a.entryName.localeCompare(b.entryName))
-
-          if (imageEntries.length === 0) {
+          if (zipImages.sourceImages.length === 0) {
             send({
               stage: 'error',
               message:
-                `No image files found in zip (${allEntries.length} total entr${allEntries.length === 1 ? 'y' : 'ies'}). ` +
+                `No image files found in zip (${zipImages.totalEntries} total entr${zipImages.totalEntries === 1 ? 'y' : 'ies'}). ` +
                 'Supported formats: JPG, TIFF, PNG, HEIC, WebP.',
             })
             controller.close()
             return
           }
 
-          const total = imageEntries.length
-          send({ stage: 'extracting', message: `Found ${total} image${total === 1 ? '' : 's'} — creating roll…` })
-
-          sourceImages = imageEntries.map(entry => ({
-            originalName: path.basename(entry.entryName),
-            readBuffer: async () => entry.getData(),
-          }))
+          tempImagePaths = [...tempImagePaths, ...zipImages.tempPaths]
+          sourceImages = zipImages.sourceImages
         } else {
           const sortedFiles = (meta.imageFiles ?? [])
             .filter(file => isImageFile(file.originalName))
@@ -372,7 +575,7 @@ export async function GET(
 
           sourceImages = sortedFiles.map(file => ({
             originalName: file.originalName,
-            readBuffer: async () => fs.readFile(file.tmpPath),
+            inputPath: file.tmpPath,
           }))
         }
 
