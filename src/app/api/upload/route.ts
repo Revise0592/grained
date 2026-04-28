@@ -89,7 +89,6 @@ async function streamToDisk(
 
     const bb = busboy({ headers: { 'content-type': contentType } })
     const openWriters = new Set<Writable>()
-    const abortController = new AbortController()
     const abortError = new UploadError('Upload was interrupted before completion. Please try again.', 400)
 
     const destroyWriters = () => {
@@ -241,19 +240,19 @@ async function streamToDisk(
 
     bb.on('close', () => {
       request.signal.removeEventListener('abort', onAbort)
-      abortController.abort()
     })
     bb.on('error', (err) => {
       destroyWriters()
       done(() => reject(err))
     })
 
-    const bodyStream = Readable.fromWeb(request.body as any, {
-      signal: abortController.signal,
-    })
+    const bodyStream = Readable.fromWeb(request.body as any)
     bodyStream.on('error', (err) => {
       destroyWriters()
       bb.destroy(err instanceof Error ? err : new Error(String(err)))
+    })
+    bodyStream.on('end', () => {
+      request.signal.removeEventListener('abort', onAbort)
     })
     bodyStream.pipe(bb)
   })
