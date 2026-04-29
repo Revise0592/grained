@@ -11,8 +11,6 @@ services:
       UPLOAD_DIR: ${UPLOAD_DIR:-/data/uploads}
       HOSTNAME: "0.0.0.0"
       AUTH_DISABLED: ${AUTH_DISABLED:-true}
-      AUTH_PASSWORD: ${AUTH_PASSWORD:-}
-      SESSION_SECRET: ${SESSION_SECRET:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]

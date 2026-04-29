@@ -129,3 +129,20 @@ model AuthSession {
   expiresAt DateTime
   revokedAt DateTime?
 }
+
+model AdminAccount {
+  id                String   @id @default("singleton")
+  passwordHash      String
+  passwordSalt      String
+  passwordUpdatedAt DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+}

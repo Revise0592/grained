@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { getAuthConfig } from '@/lib/auth-config'
+import { getAuthState } from '@/lib/auth-state'
 
-export function GET() {
-  const auth = getAuthConfig()
+export async function GET() {
+  const auth = await getAuthState()
   const body = {
-    status: auth.mode === 'misconfigured' ? 'error' : 'ok',
-    auth: auth.mode,
+    status: 'ok',
+    auth,
   }
-  return NextResponse.json(body, { status: auth.mode === 'misconfigured' ? 503 : 200 })
+  return NextResponse.json(body)
 }

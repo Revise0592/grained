@@ -3,7 +3,7 @@ import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Nav } from '@/components/nav'
 import { StatsBar } from '@/components/stats-bar'
-import { getAuthConfig } from '@/lib/auth-config'
+import { getAuthState } from '@/lib/auth-state'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,8 +30,8 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const authEnabled = getAuthConfig().mode === 'enabled'
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const authEnabled = (await getAuthState()) === 'enabled'
 
   return (
     <html lang="en" suppressHydrationWarning>

@@ -1,81 +1,153 @@
+import { createHash, randomBytes, scrypt as nodeScrypt, timingSafeEqual } from 'crypto'
+import { promisify } from 'util'
+import { prisma } from './db'
+
+const scrypt = promisify(nodeScrypt)
+
 export const SESSION_COOKIE = 'grained-auth'
 export const COOKIE_MAX_AGE = 60 * 60 * 24 * 30 // 30 days
 export const SESSION_TTL_MS = COOKIE_MAX_AGE * 1000
+export const ADMIN_ACCOUNT_ID = 'singleton'
+export const PASSWORD_RESET_TOKEN_TTL_MS = 15 * 60 * 1000
+const PASSWORD_HASH_BYTES = 64
+const MIN_PASSWORD_LENGTH = 10
 
-export type SessionTokenPayload = {
-  sid: string
-  iat: number
-  exp: number
-}
-
-function encodeBase64Url(input: string): string {
-  return Buffer.from(input, 'utf8').toString('base64url')
-}
-
-function decodeBase64Url(input: string): string {
-  return Buffer.from(input, 'base64url').toString('utf8')
-}
-
-function toBase64Url(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString('base64url')
-}
-
-async function hmacKey(secret: string): Promise<CryptoKey> {
-  return crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign', 'verify']
-  )
-}
-
-export async function createSessionToken(secret: string, payload: SessionTokenPayload): Promise<string> {
-  const encodedPayload = encodeBase64Url(JSON.stringify(payload))
-  const key = await hmacKey(secret)
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(encodedPayload))
-  return `${encodedPayload}.${toBase64Url(new Uint8Array(sig))}`
-}
-
-export async function verifySessionToken(token: string, secret: string): Promise<SessionTokenPayload | null> {
-  try {
-    const [encodedPayload, encodedSig] = token.split('.')
-    if (!encodedPayload || !encodedSig) return null
-
-    const key = await hmacKey(secret)
-    const bytes = new Uint8Array(Buffer.from(encodedSig, 'base64url'))
-    const valid = await crypto.subtle.verify('HMAC', key, bytes, new TextEncoder().encode(encodedPayload))
-    if (!valid) return null
-
-    const payload = JSON.parse(decodeBase64Url(encodedPayload)) as Partial<SessionTokenPayload>
-    if (
-      typeof payload.sid !== 'string' ||
-      typeof payload.iat !== 'number' ||
-      typeof payload.exp !== 'number'
-    ) {
-      return null
-    }
-
-    if (payload.exp <= Date.now() || payload.iat > payload.exp) {
-      return null
-    }
-
-    return {
-      sid: payload.sid,
-      iat: payload.iat,
-      exp: payload.exp,
-    }
-  } catch {
-    return null
+type CookieRequestLike = {
+  headers: {
+    get(name: string): string | null
+  }
+  nextUrl?: {
+    protocol?: string
   }
 }
 
-export function buildSessionCookieOptions() {
+function shouldUseSecureCookies(request?: CookieRequestLike) {
+  if (process.env.NODE_ENV !== 'production') return false
+
+  const forwardedProto = request?.headers.get('x-forwarded-proto')?.split(',')[0]?.trim().toLowerCase()
+  if (forwardedProto) return forwardedProto === 'https'
+
+  const protocol = request?.nextUrl?.protocol?.toLowerCase()
+  if (protocol) return protocol === 'https:'
+
+  return false
+}
+
+export function buildSessionCookieOptions(request?: CookieRequestLike) {
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookies(request),
     sameSite: 'lax' as const,
     maxAge: COOKIE_MAX_AGE,
     path: '/',
   }
+}
+
+export function validatePassword(password: string): string | null {
+  if (password.trim().length < MIN_PASSWORD_LENGTH) {
+    return `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`
+  }
+  return null
+}
+
+export async function hashPassword(password: string) {
+  const salt = randomBytes(16).toString('hex')
+  const hash = await scrypt(password, salt, PASSWORD_HASH_BYTES) as Buffer
+  return {
+    passwordSalt: salt,
+    passwordHash: hash.toString('hex'),
+  }
+}
+
+export async function verifyPassword(password: string, passwordSalt: string, passwordHash: string) {
+  const derived = await scrypt(password, passwordSalt, PASSWORD_HASH_BYTES) as Buffer
+  const expected = Buffer.from(passwordHash, 'hex')
+  return derived.length === expected.length && timingSafeEqual(derived, expected)
+}
+
+export function createSessionToken() {
+  return randomBytes(24).toString('hex')
+}
+
+export function isValidSessionToken(token: string) {
+  return /^[a-f0-9]{48}$/.test(token)
+}
+
+export async function hasAdminAccount() {
+  const admin = await prisma.adminAccount.findUnique({
+    where: { id: ADMIN_ACCOUNT_ID },
+    select: { id: true },
+  })
+  return Boolean(admin)
+}
+
+export async function createAdminPassword(password: string) {
+  const validationError = validatePassword(password)
+  if (validationError) {
+    throw new Error(validationError)
+  }
+
+  const hashed = await hashPassword(password)
+  return prisma.adminAccount.create({
+    data: {
+      id: ADMIN_ACCOUNT_ID,
+      ...hashed,
+      passwordUpdatedAt: new Date(),
+    },
+  })
+}
+
+export async function updateAdminPassword(password: string) {
+  const validationError = validatePassword(password)
+  if (validationError) {
+    throw new Error(validationError)
+  }
+
+  const hashed = await hashPassword(password)
+  return prisma.adminAccount.update({
+    where: { id: ADMIN_ACCOUNT_ID },
+    data: {
+      ...hashed,
+      passwordUpdatedAt: new Date(),
+    },
+  })
+}
+
+export async function getAdminAccountForAuth() {
+  return prisma.adminAccount.findUnique({
+    where: { id: ADMIN_ACCOUNT_ID },
+    select: {
+      id: true,
+      passwordSalt: true,
+      passwordHash: true,
+    },
+  })
+}
+
+export function hashResetToken(token: string) {
+  return createHash('sha256').update(token).digest('hex')
+}
+
+export async function createPasswordResetTokenRecord() {
+  const token = randomBytes(24).toString('base64url')
+  const tokenHash = hashResetToken(token)
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS)
+
+  await prisma.passwordResetToken.deleteMany({
+    where: {
+      OR: [
+        { expiresAt: { lte: new Date() } },
+        { usedAt: { not: null } },
+      ],
+    },
+  })
+
+  await prisma.passwordResetToken.create({
+    data: {
+      tokenHash,
+      expiresAt,
+    },
+  })
+
+  return { token, expiresAt }
 }

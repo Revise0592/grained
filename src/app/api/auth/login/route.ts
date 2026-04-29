@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/db'
 import {
   SESSION_COOKIE,
   SESSION_TTL_MS,
   buildSessionCookieOptions,
   createSessionToken,
+  getAdminAccountForAuth,
+  verifyPassword,
 } from '@/lib/auth'
 import { clearLoginFailures, getLoginThrottleStatus, getThrottleKey, recordLoginFailure } from '@/lib/auth-rate-limit'
-import { getAuthConfig } from '@/lib/auth-config'
+import { getAuthState } from '@/lib/auth-state'
 
 export async function POST(request: NextRequest) {
   let body: { password?: unknown }
@@ -18,16 +19,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Expected JSON body' }, { status: 400 })
   }
 
-  const auth = getAuthConfig()
-  if (auth.mode === 'disabled') {
+  const authState = await getAuthState()
+  if (authState === 'disabled') {
     return NextResponse.json({ error: 'Auth is disabled' }, { status: 404 })
   }
-  if (auth.mode === 'misconfigured') {
-    return NextResponse.json({ error: auth.reason }, { status: 503 })
+  if (authState === 'setup-required') {
+    return NextResponse.json({ error: 'Admin setup is required before signing in.' }, { status: 409 })
   }
 
   if (typeof body.password !== 'string') {
     return NextResponse.json({ error: 'Password is required' }, { status: 400 })
+  }
+
+  const admin = await getAdminAccountForAuth()
+  if (!admin) {
+    return NextResponse.json({ error: 'Admin setup is required before signing in.' }, { status: 409 })
   }
 
   const throttleKey = getThrottleKey(
@@ -38,16 +44,12 @@ export async function POST(request: NextRequest) {
   if (!throttleStatus.allowed) {
     return NextResponse.json(
       { error: 'Too many failed login attempts. Try again later.' },
-      {
-        status: 429,
-        headers: {
-          'Retry-After': String(throttleStatus.retryAfterSeconds),
-        },
-      },
+      { status: 429, headers: { 'Retry-After': String(throttleStatus.retryAfterSeconds) } },
     )
   }
 
-  if (body.password !== auth.password) {
+  const validPassword = await verifyPassword(body.password, admin.passwordSalt, admin.passwordHash)
+  if (!validPassword) {
     if (throttleStatus.delayMs > 0) {
       await new Promise(resolve => setTimeout(resolve, throttleStatus.delayMs))
     }
@@ -68,18 +70,8 @@ export async function POST(request: NextRequest) {
 
   clearLoginFailures(throttleKey)
 
-  const now = Date.now()
-  const sessionId = randomBytes(16).toString('hex')
-  const expiresAt = new Date(now + SESSION_TTL_MS)
-
-  await prisma.authSession.deleteMany({
-    where: {
-      OR: [
-        { expiresAt: { lte: new Date(now) } },
-        { revokedAt: { not: null } },
-      ],
-    },
-  })
+  const sessionId = createSessionToken()
+  const expiresAt = new Date(Date.now() + SESSION_TTL_MS)
   await prisma.authSession.create({
     data: {
       id: sessionId,
@@ -87,14 +79,7 @@ export async function POST(request: NextRequest) {
     },
   })
 
-  const token = await createSessionToken(auth.secret, {
-    sid: sessionId,
-    iat: now,
-    exp: expiresAt.getTime(),
-  })
-
   const response = NextResponse.json({ ok: true })
-  response.cookies.set(SESSION_COOKIE, token, buildSessionCookieOptions())
-
+  response.cookies.set(SESSION_COOKIE, sessionId, buildSessionCookieOptions(request))
   return response
 }

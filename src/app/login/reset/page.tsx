@@ -1,17 +1,15 @@
 import { redirect } from 'next/navigation'
 import { getAuthState } from '@/lib/auth-state'
-import LoginForm from './login-form'
-import SetupForm from './setup-form'
+import ResetForm from './reset-form'
 
-export default async function LoginPage() {
+export default async function ResetPage() {
   const authState = await getAuthState()
   if (authState === 'disabled') {
     redirect('/')
   }
-
   if (authState === 'setup-required') {
-    return <SetupForm />
+    redirect('/login')
   }
 
-  return <LoginForm />
+  return <ResetForm />
 }

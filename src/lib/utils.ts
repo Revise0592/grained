@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import { getUploadDir as getRuntimeUploadDir } from './runtime-paths'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -52,5 +53,5 @@ export function isImageFile(filename: string): boolean {
 }
 
 export function getUploadDir(): string {
-  return process.env.UPLOAD_DIR ?? './data/uploads'
+  return getRuntimeUploadDir()
 }

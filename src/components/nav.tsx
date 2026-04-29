@@ -8,7 +8,7 @@ export function Nav({ authEnabled }: { authEnabled?: boolean }) {
   const pathname = usePathname()
   const router = useRouter()
 
-  if (pathname === '/login') return null
+  if (pathname.startsWith('/login')) return null
 
   const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' })

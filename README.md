@@ -40,8 +40,6 @@ Set these **minimum required variables** in `.env`:
 Optional / advanced variables:
 
 - `AUTH_DISABLED`
-- `AUTH_PASSWORD`
-- `SESSION_SECRET`
 - `API_KEY`
 - `UPLOAD_TEMP_TTL_MS`
 - `ENABLE_LEGACY_CHUNK_UPLOAD`
@@ -60,9 +58,7 @@ Open [http://localhost:3000](http://localhost:3000).
 |---|---|---|
 | `DATABASE_URL` | `file:/data/grained.db` | Location of your archive database. |
 | `UPLOAD_DIR` | `/data/uploads` | Folder where original scans and generated files are stored. |
-| `AUTH_DISABLED` | `true` | Explicitly disables authentication for local/public deployments. |
-| `AUTH_PASSWORD` | *(unset)* | Password used for login when `AUTH_DISABLED=false`. |
-| `SESSION_SECRET` | *(unset)* | Secret used to sign revocable login sessions when `AUTH_DISABLED=false`. |
+| `AUTH_DISABLED` | `true` | Explicitly disables authentication for local/public deployments. Set to `false` to use Grained's built-in single-admin auth. |
 | `API_KEY` | *(unset)* | Bearer token for API access via middleware protection. |
 | `UPLOAD_TEMP_TTL_MS` | `86400000` | How long temporary upload files are kept before cleanup (in milliseconds). |
 | `ENABLE_LEGACY_CHUNK_UPLOAD` | `false` | Compatibility mode for older chunked upload behavior. |
@@ -70,10 +66,35 @@ Open [http://localhost:3000](http://localhost:3000).
 #### Common deployment patterns
 
 - **Local default:** Leave `AUTH_DISABLED=true` for a simple local archive.
-- **Password-protected:** Set `AUTH_DISABLED=false` and add `AUTH_PASSWORD` plus `SESSION_SECRET`.
+- **Password-protected:** Set `AUTH_DISABLED=false`, start the app, open `/login`, and create the admin password in the browser on first run.
 - **API-enabled:** Add `API_KEY` when you want protected API access alongside the web app.
 
-If `AUTH_DISABLED` is not set to `true`, Grained now requires both `AUTH_PASSWORD` and `SESSION_SECRET`. Partial auth configuration is treated as an error and the container will refuse to start.
+When `AUTH_DISABLED=false`, Grained manages auth state in the database:
+
+- The first visit to `/login` shows a one-time admin setup screen if no admin account exists yet.
+- After setup, Grained uses a stored password hash plus revocable server-side sessions.
+- You do not need to manage `AUTH_PASSWORD` or `SESSION_SECRET` environment variables.
+
+When authentication is enabled, Grained sets session cookies based on the actual request protocol:
+
+- **HTTPS:** cookies are marked `Secure`.
+- **HTTP:** cookies are still allowed so local/self-hosted non-TLS deployments can log in successfully.
+
+If login appears to succeed but immediately sends you back to the login screen, the usual causes are:
+
+- `AUTH_DISABLED` is still set to `true`
+- the container is running an older image without the latest auth fix
+- the database has not applied the latest Prisma migrations
+
+### Password recovery
+
+If you forget the admin password, generate a one-time reset token inside the container:
+
+```bash
+docker exec -it grained npm run auth:reset-token
+```
+
+Then open `/login/reset`, paste the token, and choose a new password. Reset tokens expire after 15 minutes and password reset revokes all existing sessions.
 
 ---
 
@@ -114,7 +135,19 @@ Uploads are capped to protect the host: direct uploads and assembled legacy chun
 
 ```bash
 npm install
-cp .env.example .env.local   # set DATABASE_URL to a local path
+cp .env.example .env.local
+```
+
+For local development, use local filesystem paths instead of the Docker `/data/...` paths:
+
+```bash
+DATABASE_URL="file:./data/grained.db"
+UPLOAD_DIR="./data/uploads"
+```
+
+Then run:
+
+```bash
 npx prisma migrate dev
 npm run dev
 ```
