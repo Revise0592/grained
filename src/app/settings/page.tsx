@@ -7,6 +7,7 @@ import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
 import { DEVELOP_PROCESSES, FILM_FORMATS } from '@/lib/film-stocks'
 import { DEFAULT_APP_SETTINGS, normalizeTags, type AppSettingsShape } from '@/lib/settings'
+import { THEME_PALETTE_OPTIONS } from '@/lib/themes'
 
 const AUTO_ROTATION_OPTIONS = [
   { value: 'off', label: 'Off' },
@@ -113,6 +114,13 @@ export default function SettingsPage() {
       alive = false
     }
   }, [])
+
+  useEffect(() => {
+    if (loading) return
+
+    setTheme(settings.displayPreferences.theme)
+    document.documentElement.dataset.palette = settings.displayPreferences.palette
+  }, [loading, setTheme, settings.displayPreferences.palette, settings.displayPreferences.theme])
 
   const normalizedTags = useMemo(() => normalizeTags(tagText.split(',')), [tagText])
 
@@ -311,6 +319,15 @@ export default function SettingsPage() {
             <option value="dark">Dark</option>
             <option value="light">Light</option>
             <option value="system">System</option>
+          </select>
+        </Field>
+        <Field label="Palette">
+          <select
+            value={settings.displayPreferences.palette}
+            onChange={e => update('displayPreferences', { palette: e.target.value as AppSettingsShape['displayPreferences']['palette'] })}
+            className={selectClass}
+          >
+            {THEME_PALETTE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </Field>
         <Field label="Grid Density">

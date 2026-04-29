@@ -4,6 +4,8 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { Nav } from '@/components/nav'
 import { StatsBar } from '@/components/stats-bar'
 import { getAuthState } from '@/lib/auth-state'
+import { prisma } from '@/lib/db'
+import { DEFAULT_APP_SETTINGS, mapDbAppSettings } from '@/lib/settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,10 +33,17 @@ export const metadata: Metadata = {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const authEnabled = (await getAuthState()) === 'enabled'
+  const [authState, appSettings] = await Promise.all([
+    getAuthState(),
+    prisma.appSettings.findUnique({ where: { id: 'singleton' } }),
+  ])
+  const authEnabled = authState === 'enabled'
+  const palette = appSettings
+    ? mapDbAppSettings(appSettings).displayPreferences.palette
+    : DEFAULT_APP_SETTINGS.displayPreferences.palette
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" data-palette={palette} suppressHydrationWarning>
       <body>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <div className="min-h-screen flex flex-col">

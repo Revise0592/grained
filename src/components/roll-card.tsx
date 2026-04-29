@@ -5,6 +5,7 @@ import { Camera, Image as ImageIcon } from 'lucide-react'
 import { cn, formatDate, imageUrl } from '@/lib/utils'
 import type { Roll, Photo, Tag } from '@prisma/client'
 import type { DisplayPreferences } from '@/lib/settings'
+import { DEFAULT_THEME_PALETTE } from '@/lib/themes'
 
 type RollWithMeta = Roll & {
   photos: Pick<Photo, 'id' | 'path' | 'filename' | 'rotation'>[]
@@ -14,6 +15,7 @@ type RollWithMeta = Roll & {
 
 const DEFAULT_DISPLAY_PREFERENCES: DisplayPreferences = {
   theme: 'dark',
+  palette: DEFAULT_THEME_PALETTE,
   gridDensity: 'comfortable',
   showFrameMetadataInGrid: true,
   showTagsOnCards: true,

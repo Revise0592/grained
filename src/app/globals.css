@@ -3,7 +3,8 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  :root,
+  html[data-palette="classic"] {
     --background: 38 25% 96%;
     --foreground: 38 12% 12%;
     --card: 0 0% 100%;
@@ -20,7 +21,7 @@
     --radius: 0.5rem;
   }
 
-  .dark {
+  html[data-palette="classic"].dark {
     --background: 38 8% 8%;
     --foreground: 38 16% 92%;
     --card: 38 8% 11%;
@@ -35,6 +36,230 @@
     --destructive: 0 62% 50%;
     --ring: 38 16% 92%;
     --radius: 0.5rem;
+  }
+
+  html[data-palette="paper"] {
+    --background: 42 36% 95%;
+    --foreground: 28 16% 18%;
+    --card: 45 30% 98%;
+    --border: 36 18% 82%;
+    --input: 36 18% 82%;
+    --muted: 40 24% 91%;
+    --muted-foreground: 28 10% 42%;
+    --primary: 28 16% 18%;
+    --primary-foreground: 45 30% 98%;
+    --accent: 198 44% 42%;
+    --accent-foreground: 45 30% 98%;
+    --destructive: 0 72% 50%;
+    --ring: 198 44% 42%;
+  }
+
+  html[data-palette="paper"].dark {
+    --background: 32 20% 10%;
+    --foreground: 42 22% 91%;
+    --card: 34 18% 13%;
+    --border: 34 12% 22%;
+    --input: 34 12% 22%;
+    --muted: 34 14% 16%;
+    --muted-foreground: 38 10% 62%;
+    --primary: 42 22% 91%;
+    --primary-foreground: 32 20% 10%;
+    --accent: 198 45% 58%;
+    --accent-foreground: 32 20% 10%;
+    --destructive: 0 62% 54%;
+    --ring: 198 45% 58%;
+  }
+
+  html[data-palette="sepia"] {
+    --background: 32 42% 92%;
+    --foreground: 24 30% 18%;
+    --card: 34 42% 96%;
+    --border: 28 28% 76%;
+    --input: 28 28% 76%;
+    --muted: 30 34% 86%;
+    --muted-foreground: 24 18% 40%;
+    --primary: 24 30% 18%;
+    --primary-foreground: 34 42% 96%;
+    --accent: 24 62% 44%;
+    --accent-foreground: 34 42% 96%;
+    --destructive: 0 68% 48%;
+    --ring: 24 62% 44%;
+  }
+
+  html[data-palette="sepia"].dark {
+    --background: 24 20% 9%;
+    --foreground: 34 34% 88%;
+    --card: 24 18% 12%;
+    --border: 22 16% 22%;
+    --input: 22 16% 22%;
+    --muted: 22 16% 15%;
+    --muted-foreground: 28 14% 58%;
+    --primary: 34 34% 88%;
+    --primary-foreground: 24 20% 9%;
+    --accent: 28 66% 54%;
+    --accent-foreground: 24 20% 9%;
+    --destructive: 0 60% 53%;
+    --ring: 28 66% 54%;
+  }
+
+  html[data-palette="darkroom"] {
+    --background: 12 18% 95%;
+    --foreground: 8 18% 15%;
+    --card: 20 20% 98%;
+    --border: 12 18% 84%;
+    --input: 12 18% 84%;
+    --muted: 16 18% 91%;
+    --muted-foreground: 10 10% 40%;
+    --primary: 8 18% 15%;
+    --primary-foreground: 20 20% 98%;
+    --accent: 8 72% 46%;
+    --accent-foreground: 20 20% 98%;
+    --destructive: 0 70% 48%;
+    --ring: 8 72% 46%;
+  }
+
+  html[data-palette="darkroom"].dark {
+    --background: 0 0% 7%;
+    --foreground: 30 12% 90%;
+    --card: 12 10% 10%;
+    --border: 12 10% 18%;
+    --input: 12 10% 18%;
+    --muted: 12 10% 13%;
+    --muted-foreground: 24 8% 60%;
+    --primary: 30 12% 90%;
+    --primary-foreground: 0 0% 7%;
+    --accent: 12 80% 56%;
+    --accent-foreground: 0 0% 7%;
+    --destructive: 0 66% 52%;
+    --ring: 12 80% 56%;
+  }
+
+  html[data-palette="kodak-gold-200"] {
+    --background: 42 72% 94%;
+    --foreground: 28 28% 16%;
+    --card: 44 78% 97%;
+    --border: 38 48% 80%;
+    --input: 38 48% 80%;
+    --muted: 40 62% 89%;
+    --muted-foreground: 30 18% 40%;
+    --primary: 28 28% 16%;
+    --primary-foreground: 44 78% 97%;
+    --accent: 38 92% 52%;
+    --accent-foreground: 24 34% 14%;
+    --destructive: 0 68% 48%;
+    --ring: 38 92% 52%;
+  }
+
+  html[data-palette="kodak-gold-200"].dark {
+    --background: 28 18% 8%;
+    --foreground: 42 64% 90%;
+    --card: 28 22% 11%;
+    --border: 30 24% 20%;
+    --input: 30 24% 20%;
+    --muted: 30 20% 14%;
+    --muted-foreground: 34 26% 60%;
+    --primary: 42 64% 90%;
+    --primary-foreground: 28 18% 8%;
+    --accent: 40 88% 58%;
+    --accent-foreground: 28 18% 8%;
+    --destructive: 0 62% 52%;
+    --ring: 40 88% 58%;
+  }
+
+  html[data-palette="fuji-superia-x-tra-400"] {
+    --background: 164 28% 94%;
+    --foreground: 176 24% 16%;
+    --card: 162 34% 97%;
+    --border: 168 20% 80%;
+    --input: 168 20% 80%;
+    --muted: 168 22% 89%;
+    --muted-foreground: 176 12% 40%;
+    --primary: 176 24% 16%;
+    --primary-foreground: 162 34% 97%;
+    --accent: 154 58% 42%;
+    --accent-foreground: 160 34% 96%;
+    --destructive: 0 66% 48%;
+    --ring: 154 58% 42%;
+  }
+
+  html[data-palette="fuji-superia-x-tra-400"].dark {
+    --background: 180 18% 8%;
+    --foreground: 156 30% 88%;
+    --card: 176 18% 11%;
+    --border: 174 18% 20%;
+    --input: 174 18% 20%;
+    --muted: 174 18% 14%;
+    --muted-foreground: 162 12% 60%;
+    --primary: 156 30% 88%;
+    --primary-foreground: 180 18% 8%;
+    --accent: 146 62% 52%;
+    --accent-foreground: 180 18% 8%;
+    --destructive: 0 60% 52%;
+    --ring: 146 62% 52%;
+  }
+
+  html[data-palette="portra-400"] {
+    --background: 18 36% 95%;
+    --foreground: 12 20% 18%;
+    --card: 20 42% 98%;
+    --border: 18 24% 84%;
+    --input: 18 24% 84%;
+    --muted: 22 28% 90%;
+    --muted-foreground: 16 10% 42%;
+    --primary: 12 20% 18%;
+    --primary-foreground: 20 42% 98%;
+    --accent: 18 70% 66%;
+    --accent-foreground: 14 30% 18%;
+    --destructive: 0 66% 49%;
+    --ring: 18 70% 66%;
+  }
+
+  html[data-palette="portra-400"].dark {
+    --background: 18 14% 9%;
+    --foreground: 24 34% 90%;
+    --card: 18 16% 12%;
+    --border: 18 12% 22%;
+    --input: 18 12% 22%;
+    --muted: 18 12% 15%;
+    --muted-foreground: 22 10% 62%;
+    --primary: 24 34% 90%;
+    --primary-foreground: 18 14% 9%;
+    --accent: 22 74% 70%;
+    --accent-foreground: 18 14% 9%;
+    --destructive: 0 60% 53%;
+    --ring: 22 74% 70%;
+  }
+
+  html[data-palette="lomo-400"] {
+    --background: 210 24% 95%;
+    --foreground: 240 20% 14%;
+    --card: 210 28% 98%;
+    --border: 226 24% 82%;
+    --input: 226 24% 82%;
+    --muted: 216 30% 90%;
+    --muted-foreground: 230 12% 40%;
+    --primary: 240 20% 14%;
+    --primary-foreground: 210 28% 98%;
+    --accent: 344 82% 56%;
+    --accent-foreground: 210 28% 98%;
+    --destructive: 0 70% 48%;
+    --ring: 344 82% 56%;
+  }
+
+  html[data-palette="lomo-400"].dark {
+    --background: 232 24% 8%;
+    --foreground: 210 30% 92%;
+    --card: 232 22% 11%;
+    --border: 232 18% 20%;
+    --input: 232 18% 20%;
+    --muted: 232 18% 14%;
+    --muted-foreground: 220 12% 62%;
+    --primary: 210 30% 92%;
+    --primary-foreground: 232 24% 8%;
+    --accent: 184 72% 48%;
+    --accent-foreground: 232 24% 8%;
+    --destructive: 0 62% 52%;
+    --ring: 184 72% 48%;
   }
 }
 

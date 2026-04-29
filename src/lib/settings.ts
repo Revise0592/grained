@@ -6,6 +6,7 @@ import {
   type AutoRotationPolicy,
   type DuplicateHandlingPolicy,
 } from '@/lib/import-settings'
+import { DEFAULT_THEME_PALETTE, THEME_PALETTES, type ThemePalette } from '@/lib/themes'
 
 export interface MetadataDefaults {
   defaultLab: string | null
@@ -28,6 +29,7 @@ export interface ImportDefaults {
 
 export interface DisplayPreferences {
   theme: 'system' | 'light' | 'dark'
+  palette: ThemePalette
   gridDensity: 'compact' | 'comfortable'
   showFrameMetadataInGrid: boolean
   showTagsOnCards: boolean
@@ -99,6 +101,7 @@ export const DEFAULT_APP_SETTINGS: AppSettingsShape = {
   },
   displayPreferences: {
     theme: 'dark',
+    palette: DEFAULT_THEME_PALETTE,
     gridDensity: 'comfortable',
     showFrameMetadataInGrid: true,
     showTagsOnCards: true,
@@ -225,6 +228,7 @@ export function normalizeAppSettings(patch?: AppSettingsPatch): AppSettingsShape
     },
     displayPreferences: {
       theme: normalizeEnum(merged.displayPreferences.theme, ['system', 'light', 'dark'] as const) ?? 'dark',
+      palette: normalizeEnum(merged.displayPreferences.palette, THEME_PALETTES) ?? DEFAULT_THEME_PALETTE,
       gridDensity: normalizeEnum(merged.displayPreferences.gridDensity, ['compact', 'comfortable'] as const) ?? 'comfortable',
       showFrameMetadataInGrid:
         normalizeBoolean(merged.displayPreferences.showFrameMetadataInGrid) ??
@@ -322,6 +326,7 @@ export function parseAppSettingsPayload(payload: unknown): { data?: AppSettingsS
       },
       displayPreferences: {
         theme: normalizeEnum(displayPreferences.theme, ['system', 'light', 'dark'] as const),
+        palette: normalizeEnum(displayPreferences.palette, THEME_PALETTES),
         gridDensity: normalizeEnum(displayPreferences.gridDensity, ['compact', 'comfortable'] as const),
         showFrameMetadataInGrid: normalizeBoolean(displayPreferences.showFrameMetadataInGrid),
         showTagsOnCards: normalizeBoolean(displayPreferences.showTagsOnCards),
