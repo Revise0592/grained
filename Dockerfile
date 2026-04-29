@@ -42,6 +42,7 @@ COPY --from=builder /app/public ./public
 # Copy full node_modules for Prisma CLI (migrate deploy needs all transitive deps)
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/scripts ./scripts
 
 # Copy entrypoint
 COPY docker-entrypoint.sh ./
