@@ -5,10 +5,14 @@ set -e
 mkdir -p /data/uploads
 
 # Report auth configuration so Unraid users can verify their setup
-if [ -n "$AUTH_PASSWORD" ]; then
-  echo "Auth: enabled (AUTH_PASSWORD is set)"
+auth_disabled="$(printf '%s' "${AUTH_DISABLED:-}" | tr '[:upper:]' '[:lower:]')"
+if [ "$auth_disabled" = "1" ] || [ "$auth_disabled" = "true" ] || [ "$auth_disabled" = "yes" ] || [ "$auth_disabled" = "on" ]; then
+  echo "Auth: disabled explicitly (AUTH_DISABLED=true)"
+elif [ -n "$AUTH_PASSWORD" ] && [ -n "$SESSION_SECRET" ]; then
+  echo "Auth: enabled"
 else
-  echo "Auth: disabled (AUTH_PASSWORD is not set — app will be publicly accessible)"
+  echo "Auth: misconfigured. Set AUTH_DISABLED=true to run publicly, or provide both AUTH_PASSWORD and SESSION_SECRET."
+  exit 1
 fi
 
 # Run database migrations

@@ -122,3 +122,10 @@ model Settings {
   defaultFilmFormat    String?
   defaultCommonTags    Json?
 }
+
+model AuthSession {
+  id        String   @id
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+}

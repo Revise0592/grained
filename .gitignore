@@ -6,6 +6,7 @@ data/
 *.db
 *.db-journal
 dist/
+*.tsbuildinfo
 .DS_Store
 .claude/
 Thumbs.db

@@ -4,7 +4,14 @@ import fs from 'fs/promises'
 import { tmpdir } from 'os'
 import { prisma } from '@/lib/db'
 import { DEFAULT_APP_SETTINGS, mapDbAppSettings } from '@/lib/settings'
-import { pruneStaleUploadTempArtifacts } from '@/lib/upload-temp'
+import {
+  ensureUploadTempCapacity,
+  getDirectorySize,
+  MAX_LEGACY_CHUNKS,
+  MAX_LEGACY_CHUNK_BYTES,
+  MAX_UPLOAD_TEMP_BYTES_PER_JOB,
+  pruneStaleUploadTempArtifacts,
+} from '@/lib/upload-temp'
 import {
   ImportSettingsValidationError,
   formatImportSettingsValidationError,
@@ -41,8 +48,18 @@ export async function POST(request: NextRequest) {
   if (!Number.isFinite(totalChunks) || totalChunks <= 0) {
     return NextResponse.json({ error: 'Invalid x-total-chunks' }, { status: 400 })
   }
+  if (chunkIndex >= totalChunks) {
+    return NextResponse.json({ error: 'x-chunk-index must be less than x-total-chunks' }, { status: 400 })
+  }
+  if (totalChunks > MAX_LEGACY_CHUNKS) {
+    return NextResponse.json({ error: 'Upload uses too many chunks' }, { status: 413 })
+  }
   if (!fileName.toLowerCase().endsWith('.zip')) {
     return NextResponse.json({ error: 'File must be a .zip' }, { status: 400 })
+  }
+  const declaredLength = Number(request.headers.get('content-length') ?? '0')
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_LEGACY_CHUNK_BYTES) {
+    return NextResponse.json({ error: 'Chunk exceeds the maximum allowed size' }, { status: 413 })
   }
 
   try {
@@ -54,6 +71,8 @@ export async function POST(request: NextRequest) {
         JSON.stringify({ scanned: cleanup.scanned, deleted: cleanup.deleted.length, ttlMs: cleanup.ttlMs }),
       )
     }
+
+    await ensureUploadTempCapacity(MAX_LEGACY_CHUNK_BYTES)
 
     const chunkDir = path.join(tmpdir(), `grained-chunks-${jobId}`)
     await fs.mkdir(chunkDir, { recursive: true })
@@ -70,6 +89,13 @@ export async function POST(request: NextRequest) {
     const data = await request.arrayBuffer()
     if (data.byteLength === 0) {
       return NextResponse.json({ error: 'Empty chunk body' }, { status: 400 })
+    }
+    if (data.byteLength > MAX_LEGACY_CHUNK_BYTES) {
+      return NextResponse.json({ error: 'Chunk exceeds the maximum allowed size' }, { status: 413 })
+    }
+    const currentJobBytes = await getDirectorySize(chunkDir).catch(() => 0)
+    if (currentJobBytes + data.byteLength > MAX_UPLOAD_TEMP_BYTES_PER_JOB) {
+      return NextResponse.json({ error: 'Upload exceeds the maximum allowed size' }, { status: 413 })
     }
 
     const chunkFile = path.join(chunkDir, `chunk-${String(chunkIndex).padStart(6, '0')}`)
@@ -89,7 +115,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(formatImportSettingsValidationError(err), { status: 400 })
     }
     const message = err instanceof Error ? err.message : 'Failed to save chunk'
+    const status = /currently full/i.test(message) ? 503 : 500
     console.error(`[upload/chunk] error saving chunk ${chunkIndex} for job ${jobId}:`, err)
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: message }, { status })
   }
 }

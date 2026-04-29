@@ -1,15 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { SESSION_COOKIE, verifySessionToken, resolveSecret } from './lib/auth'
+import { prisma } from './lib/db'
+import { SESSION_COOKIE, buildSessionCookieOptions, verifySessionToken } from './lib/auth'
+import { getAuthConfig } from './lib/auth-config'
+
+export const runtime = 'nodejs'
+
+function unauthorizedResponse(request: NextRequest) {
+  if (request.nextUrl.pathname.startsWith('/api/')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  return NextResponse.redirect(new URL('/login', request.url))
+}
+
+function authMisconfiguredResponse(request: NextRequest, message: string) {
+  if (request.nextUrl.pathname.startsWith('/api/')) {
+    return NextResponse.json({ error: message }, { status: 503 })
+  }
+
+  return new NextResponse(message, {
+    status: 503,
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+  })
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // If no password is configured, auth is disabled.
-  // Bracket notation prevents SWC/webpack from inlining these at build time,
-  // ensuring they are always read from the runtime environment (e.g. Docker env vars set by Unraid).
-  const password = process.env['AUTH_PASSWORD']
-  const secret = await resolveSecret(process.env['SESSION_SECRET'], password)
-  if (!password || !secret) return NextResponse.next()
+  const auth = getAuthConfig()
+  if (auth.mode === 'disabled') return NextResponse.next()
+
+  if (pathname === '/api/health') {
+    return NextResponse.next()
+  }
+
+  if (auth.mode === 'misconfigured') {
+    return authMisconfiguredResponse(request, auth.reason)
+  }
 
   // Always allow login page, auth API, and public stats
   if (pathname.startsWith('/login') || pathname.startsWith('/api/auth/') || pathname === '/api/stats') {
@@ -17,23 +44,32 @@ export async function middleware(request: NextRequest) {
   }
 
   // API key auth for API clients — set API_KEY env var to enable
-  const apiKey = process.env['API_KEY']
-  if (apiKey) {
+  if (auth.apiKey) {
     const authHeader = request.headers.get('authorization')
-    if (authHeader === `Bearer ${apiKey}`) {
+    if (authHeader === `Bearer ${auth.apiKey}`) {
       return NextResponse.next()
     }
   }
 
   const token = request.cookies.get(SESSION_COOKIE)?.value
   if (!token) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    return unauthorizedResponse(request)
   }
 
-  const valid = await verifySessionToken(token, secret)
-  if (!valid) {
-    const res = NextResponse.redirect(new URL('/login', request.url))
-    res.cookies.delete(SESSION_COOKIE)
+  const payload = await verifySessionToken(token, auth.secret)
+  if (!payload) {
+    const res = unauthorizedResponse(request)
+    res.cookies.set(SESSION_COOKIE, '', { ...buildSessionCookieOptions(), maxAge: 0 })
+    return res
+  }
+
+  const session = await prisma.authSession.findUnique({
+    where: { id: payload.sid },
+    select: { id: true, revokedAt: true, expiresAt: true },
+  })
+  if (!session || session.revokedAt || session.expiresAt.getTime() <= Date.now()) {
+    const res = unauthorizedResponse(request)
+    res.cookies.set(SESSION_COOKIE, '', { ...buildSessionCookieOptions(), maxAge: 0 })
     return res
   }
 

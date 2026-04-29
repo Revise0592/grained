@@ -1,0 +1,6 @@
+CREATE TABLE "AuthSession" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" DATETIME NOT NULL,
+    "revokedAt" DATETIME
+);

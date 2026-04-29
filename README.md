@@ -39,6 +39,7 @@ Set these **minimum required variables** in `.env`:
 
 Optional / advanced variables:
 
+- `AUTH_DISABLED`
 - `AUTH_PASSWORD`
 - `SESSION_SECRET`
 - `API_KEY`
@@ -59,17 +60,20 @@ Open [http://localhost:3000](http://localhost:3000).
 |---|---|---|
 | `DATABASE_URL` | `file:/data/grained.db` | Location of your archive database. |
 | `UPLOAD_DIR` | `/data/uploads` | Folder where original scans and generated files are stored. |
-| `AUTH_PASSWORD` | *(unset)* | Enables password protection when set. |
-| `SESSION_SECRET` | *(unset)* | Secret used for login sessions (set when `AUTH_PASSWORD` is enabled). |
+| `AUTH_DISABLED` | `true` | Explicitly disables authentication for local/public deployments. |
+| `AUTH_PASSWORD` | *(unset)* | Password used for login when `AUTH_DISABLED=false`. |
+| `SESSION_SECRET` | *(unset)* | Secret used to sign revocable login sessions when `AUTH_DISABLED=false`. |
 | `API_KEY` | *(unset)* | Bearer token for API access via middleware protection. |
 | `UPLOAD_TEMP_TTL_MS` | `86400000` | How long temporary upload files are kept before cleanup (in milliseconds). |
 | `ENABLE_LEGACY_CHUNK_UPLOAD` | `false` | Compatibility mode for older chunked upload behavior. |
 
 #### Common deployment patterns
 
-- **Local default:** Set only `DATABASE_URL` and `UPLOAD_DIR` for a simple local archive.
-- **Password-protected:** Add `AUTH_PASSWORD` and `SESSION_SECRET` to require a login.
+- **Local default:** Leave `AUTH_DISABLED=true` for a simple local archive.
+- **Password-protected:** Set `AUTH_DISABLED=false` and add `AUTH_PASSWORD` plus `SESSION_SECRET`.
 - **API-enabled:** Add `API_KEY` when you want protected API access alongside the web app.
+
+If `AUTH_DISABLED` is not set to `true`, Grained now requires both `AUTH_PASSWORD` and `SESSION_SECRET`. Partial auth configuration is treated as an error and the container will refuse to start.
 
 ---
 
@@ -101,6 +105,8 @@ Database updates are applied automatically when the container starts.
 4. Open **Edit** to add roll details and notes.
 
 Supported formats: JPG, TIFF, PNG, HEIC, WebP.
+
+Uploads are capped to protect the host: direct uploads and assembled legacy chunk uploads are limited to roughly 800 MB per job, legacy chunks are limited to 10 MB each with a maximum of 80 chunks, and Grained refuses new uploads when shared temp storage is exhausted.
 
 ---
 

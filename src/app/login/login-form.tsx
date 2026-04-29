@@ -10,21 +10,54 @@ export default function LoginForm() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  async function readErrorMessage(res: Response) {
+    const contentType = res.headers.get('content-type') ?? ''
+
+    if (contentType.includes('application/json')) {
+      try {
+        const data = await res.json() as { error?: string }
+        if (typeof data.error === 'string' && data.error.trim()) {
+          return data.error
+        }
+      } catch {
+        // Fall through to text/status fallback.
+      }
+    }
+
+    try {
+      const text = await res.text()
+      if (text.trim()) return text
+    } catch {
+      // Ignore and fall through to status fallback.
+    }
+
+    if (res.status === 401) return 'Incorrect password'
+    if (res.status === 429) return 'Too many failed login attempts. Try again later.'
+    if (res.status >= 500) return 'Login failed due to a server error.'
+    return 'Login failed'
+  }
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
-    })
-    if (res.ok) {
-      router.push('/')
-      router.refresh()
-    } else {
-      const data = await res.json()
-      setError(data.error ?? 'Incorrect password')
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      })
+
+      if (res.ok) {
+        router.push('/')
+        router.refresh()
+        return
+      }
+
+      setError(await readErrorMessage(res))
+    } catch {
+      setError('Unable to reach the server. Please try again.')
+    } finally {
       setLoading(false)
     }
   }

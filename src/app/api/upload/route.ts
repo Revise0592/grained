@@ -10,6 +10,9 @@ import { DEFAULT_APP_SETTINGS, mapDbAppSettings } from '@/lib/settings'
 import {
   createUploadTempImagePath,
   createUploadTempPaths,
+  ensureUploadTempCapacity,
+  MAX_DIRECT_UPLOAD_BYTES,
+  MAX_UPLOAD_TEMP_BYTES_PER_JOB,
   pruneStaleUploadTempArtifacts,
 } from '@/lib/upload-temp'
 import {
@@ -46,6 +49,12 @@ class UploadError extends Error {
   }
 }
 
+class UploadLimitError extends UploadError {
+  constructor(message: string) {
+    super(message, 413)
+  }
+}
+
 function normalizeRollId(value: string): string | undefined {
   const trimmed = value.trim()
   if (!trimmed) return undefined
@@ -70,8 +79,7 @@ async function getUploadTempTtlMs() {
   return hours * 60 * 60 * 1000
 }
 
-/** Stream multipart body to temp files on disk.
- *  No size limit — busboy pipes directly to disk, nothing is buffered in memory. */
+/** Stream multipart body to temp files on disk while enforcing upload ceilings. */
 async function streamToDisk(
   request: NextRequest,
   jobId: string,
@@ -90,6 +98,7 @@ async function streamToDisk(
     const bb = busboy({ headers: { 'content-type': contentType } })
     const openWriters = new Set<Writable>()
     const abortError = new UploadError('Upload was interrupted before completion. Please try again.', 400)
+    let totalRequestBytes = 0
 
     const destroyWriters = () => {
       for (const ws of openWriters) {
@@ -142,7 +151,13 @@ async function streamToDisk(
           stream.on('error', rej)
         })
         stream.on('data', (chunk: Buffer) => {
+          totalRequestBytes += chunk.length
           zipBytes += chunk.length
+          if (totalRequestBytes > MAX_DIRECT_UPLOAD_BYTES || zipBytes > MAX_UPLOAD_TEMP_BYTES_PER_JOB) {
+            stream.unpipe(ws)
+            ws.destroy(new UploadLimitError('Upload exceeds the maximum allowed size.'))
+            stream.destroy(new UploadLimitError('Upload exceeds the maximum allowed size.'))
+          }
         })
         stream.pipe(ws)
         writes.push(writePromise)
@@ -176,7 +191,13 @@ async function streamToDisk(
         stream.on('error', rej)
       })
       stream.on('data', (chunk: Buffer) => {
+        totalRequestBytes += chunk.length
         imageBytes += chunk.length
+        if (totalRequestBytes > MAX_DIRECT_UPLOAD_BYTES) {
+          stream.unpipe(ws)
+          ws.destroy(new UploadLimitError('Upload exceeds the maximum allowed size.'))
+          stream.destroy(new UploadLimitError('Upload exceeds the maximum allowed size.'))
+        }
       })
       stream.pipe(ws)
       writes.push(writePromise)
@@ -266,6 +287,10 @@ export async function POST(request: NextRequest) {
   if (!request.body) {
     return NextResponse.json({ error: 'No request body' }, { status: 400 })
   }
+  const contentLength = Number(request.headers.get('content-length') ?? '0')
+  if (Number.isFinite(contentLength) && contentLength > MAX_DIRECT_UPLOAD_BYTES) {
+    return NextResponse.json({ error: 'Upload exceeds the maximum allowed size.' }, { status: 413 })
+  }
 
   try {
     const cleanup = await pruneStaleUploadTempArtifacts(Date.now(), await getUploadTempTtlMs())
@@ -277,6 +302,13 @@ export async function POST(request: NextRequest) {
     }
   } catch (err) {
     console.warn('[upload] temp artifact pruning failed', err)
+  }
+
+  try {
+    await ensureUploadTempCapacity()
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Upload temp storage is unavailable.'
+    return NextResponse.json({ error: message }, { status: 503 })
   }
 
   const jobId = randomBytes(16).toString('hex')
