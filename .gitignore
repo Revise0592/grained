@@ -3,6 +3,7 @@
 .next/
 node_modules/
 data/
+docs/
 *.db
 *.db-journal
 dist/
