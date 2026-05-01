@@ -98,26 +98,6 @@ Then open `/login/reset`, paste the token, and choose a new password. Reset toke
 
 ---
 
-## Data persistence
-
-Your archive lives in a named Docker volume (`grained_data`), separate from app files, so updates do not overwrite your scans or database.
-
-```
-grained_data/
-├── grained.db
-└── uploads/
-    └── <roll-id>/
-        ├── 0001.jpg
-        ├── 0002.tif
-        └── thumbs/
-            ├── 0001.jpg
-            └── 0002.jpg
-```
-
-Database updates are applied automatically when the container starts.
-
----
-
 ## Importing a roll
 
 1. Download a ZIP of scans from your lab.
