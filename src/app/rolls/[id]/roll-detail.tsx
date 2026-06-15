@@ -8,7 +8,7 @@ import { cn, formatDate, imageUrl, thumbPath } from '@/lib/utils'
 import { Lightbox } from '@/components/lightbox'
 import { Comments } from '@/components/comments'
 import { UploadZone } from '@/components/upload-zone'
-import type { AppSettingsShape } from '@/lib/settings'
+import { useAppSettings } from '@/components/app-settings-context'
 import type { Roll, Photo, RollComment, Tag as PrismaTag } from '@prisma/client'
 
 type RollWithRelations = Roll & {
@@ -31,17 +31,9 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deletingSelected, setDeletingSelected] = useState(false)
   const [showUploader, setShowUploader] = useState(false)
-  const [requireDeleteConfirmation, setRequireDeleteConfirmation] = useState(true)
+  const { dataSafety } = useAppSettings()
+  const requireDeleteConfirmation = dataSafety.requireDeleteConfirmation
   const [debugRotation, setDebugRotation] = useState(false)
-
-  useEffect(() => {
-    fetch('/api/settings')
-      .then(r => r.json())
-      .then((settings: AppSettingsShape) => {
-        setRequireDeleteConfirmation(settings.dataSafety.requireDeleteConfirmation)
-      })
-      .catch(() => {})
-  }, [])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)

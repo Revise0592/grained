@@ -3,7 +3,21 @@
 import { useEffect, useState, useRef } from 'react'
 import { UploadCloud, FileArchive, FileImage, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import type { AppSettingsShape } from '@/lib/settings'
+import { useAppSettings } from './app-settings-context'
+import type { AutoRotationPolicy, DuplicateHandlingPolicy } from '@/lib/import-settings'
+
+function createClientJobId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID().replace(/-/g, '')
+  }
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16)
+    crypto.getRandomValues(bytes)
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
+  }
+  const randomHex = () => Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0')
+  return `${randomHex()}${randomHex()}${randomHex()}${randomHex()}`.slice(0, 32)
+}
 
 interface UploadZoneProps {
   onSuccess?: (rollId: string) => void
@@ -31,28 +45,24 @@ function ProgressBar({ percent }: { percent: number }) {
 
 export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
   const router = useRouter()
+  const appSettings = useAppSettings()
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [selectionMode, setSelectionMode] = useState<'zip' | 'files' | null>(null)
   const [rollName, setRollName] = useState('')
-  const [frameNumberStart, setFrameNumberStart] = useState('')
-  const [autoRotationPolicy, setAutoRotationPolicy] = useState('exif-only')
-  const [duplicateHandling, setDuplicateHandling] = useState('rename')
+  const [frameNumberStart, setFrameNumberStart] = useState(
+    appSettings.importDefaults.frameNumberStart?.toString() ?? ''
+  )
+  const [autoRotationPolicy, setAutoRotationPolicy] = useState(
+    appSettings.importDefaults.autoRotationPolicy
+  )
+  const [duplicateHandling, setDuplicateHandling] = useState(
+    appSettings.importDefaults.duplicateHandling
+  )
   const [progress, setProgress] = useState<ProgressState>({ stage: 'idle' })
   const [dragOver, setDragOver] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const rollNameRef = useRef(rollName)
   rollNameRef.current = rollName
-
-  useEffect(() => {
-    fetch('/api/settings')
-      .then(r => r.json())
-      .then((settings: AppSettingsShape) => {
-        setFrameNumberStart(settings.importDefaults.frameNumberStart?.toString() ?? '')
-        setAutoRotationPolicy(settings.importDefaults.autoRotationPolicy)
-        setDuplicateHandling(settings.importDefaults.duplicateHandling)
-      })
-      .catch(() => {})
-  }, [])
 
   const busy =
     progress.stage === 'uploading' ||
@@ -491,7 +501,7 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
               <label className="text-sm font-medium text-foreground block mb-1.5">Rotation</label>
               <select
                 value={autoRotationPolicy}
-                onChange={(e) => setAutoRotationPolicy(e.target.value)}
+                onChange={(e) => setAutoRotationPolicy(e.target.value as AutoRotationPolicy)}
                 className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
               >
                 <option value="off">Off</option>
@@ -503,7 +513,7 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
               <label className="text-sm font-medium text-foreground block mb-1.5">Duplicates</label>
               <select
                 value={duplicateHandling}
-                onChange={(e) => setDuplicateHandling(e.target.value)}
+                onChange={(e) => setDuplicateHandling(e.target.value as DuplicateHandlingPolicy)}
                 className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
               >
                 <option value="skip">Skip</option>
@@ -596,15 +606,3 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
     </div>
   )
 }
-  const createClientJobId = () => {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-      return crypto.randomUUID().replace(/-/g, '')
-    }
-    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
-      const bytes = new Uint8Array(16)
-      crypto.getRandomValues(bytes)
-      return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
-    }
-    const randomHex = () => Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0')
-    return `${randomHex()}${randomHex()}${randomHex()}${randomHex()}`.slice(0, 32)
-  }

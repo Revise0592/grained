@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronDown, Loader2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { inputClass, selectClass } from '@/lib/ui'
 import { FILM_STOCKS, FILM_FORMATS, DEVELOP_PROCESSES, PUSH_PULL_VALUES } from '@/lib/film-stocks'
 import { normalizeTag, normalizeTags, type AppSettingsShape } from '@/lib/settings'
 import type { Roll } from '@prisma/client'
@@ -436,5 +437,3 @@ function Field({ label, required, children }: { label: string; required?: boolea
   )
 }
 
-const inputClass = 'w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground'
-const selectClass = cn(inputClass, 'appearance-none cursor-pointer')

@@ -44,13 +44,17 @@ type SourceImage = {
   inputPath: string
 }
 
+type ImageSource =
+  | { kind: 'files'; images: SourceImage[] }
+  | { kind: 'zip'; zipFile: yauzl.ZipFile; entries: Array<{ entry: yauzl.Entry; originalName: string }> }
+
 type EffectiveImportSettings = {
   frameNumberStart?: number
   autoRotationPolicy: AutoRotationPolicy
   duplicateHandling: DuplicateHandlingPolicy
 }
 
-const MAX_PARALLEL_IMAGE_WORK = 3
+const MAX_PARALLEL_IMAGE_WORK = 4
 const MAX_INPUT_PIXELS = 100_000_000
 const MAX_ZIP_ENTRY_BYTES = 100 * 1024 * 1024
 const MAX_ZIP_TOTAL_BYTES = 750 * 1024 * 1024
@@ -135,22 +139,19 @@ async function writeZipEntryToTempFile(
   return { tmpPath, bytesWritten: written }
 }
 
-async function collectZipImageFiles(
-  tmpZip: string,
-  send: (data: object) => void,
-) {
-  let zipFile: yauzl.ZipFile | null = null
-  const tempPaths: string[] = []
-  let totalExtractedBytes = 0
+async function enumerateZipImageEntries(tmpZip: string): Promise<{
+  zipFile: yauzl.ZipFile
+  imageEntries: Array<{ entry: yauzl.Entry; originalName: string; entryName: string }>
+  totalEntries: number
+}> {
+  const zipFile = await openZipFile(tmpZip)
+  const imageEntries: Array<{ entry: yauzl.Entry; originalName: string; entryName: string }> = []
+  let totalEntries = 0
 
   try {
-    zipFile = await openZipFile(tmpZip)
-    const imageEntries: Array<{ entry: yauzl.Entry; originalName: string; entryName: string }> = []
-    let totalEntries = 0
-
     await new Promise<void>((resolve, reject) => {
-      zipFile!.on('error', reject)
-      zipFile!.on('entry', (entry) => {
+      zipFile.on('error', reject)
+      zipFile.on('entry', (entry) => {
         totalEntries += 1
         const entryFileName = getZipEntryFileName(entry)
         const isDirectory = looksLikeDirectoryEntry(entry)
@@ -163,12 +164,11 @@ async function collectZipImageFiles(
               reject(new Error(`Zip contains invalid or unsafe image path: "${entryFileName}"`))
               return
             }
-            // Ignore invalid non-image paths from archive metadata/noise.
-            zipFile!.readEntry()
+            zipFile.readEntry()
             return
           }
           if (safeName.basename.startsWith('.') || safeName.basename.startsWith('__')) {
-            zipFile!.readEntry()
+            zipFile.readEntry()
             return
           }
           if (isImageFile(safeName.basename)) {
@@ -176,51 +176,61 @@ async function collectZipImageFiles(
               reject(new Error(`Zip entry "${safeName.basename}" exceeds per-file extraction limit`))
               return
             }
-            imageEntries.push({
-              entry,
-              originalName: safeName.basename,
-              entryName: safeName.entryName,
-            })
+            imageEntries.push({ entry, originalName: safeName.basename, entryName: safeName.entryName })
           }
         }
-        zipFile!.readEntry()
+        zipFile.readEntry()
       })
-      zipFile!.on('end', resolve)
-      zipFile!.readEntry()
+      zipFile.on('end', resolve)
+      zipFile.readEntry()
     })
+  } catch (err) {
+    zipFile.close()
+    throw err
+  }
 
-    imageEntries.sort((a, b) => a.entryName.localeCompare(b.entryName))
-    if (imageEntries.length === 0) {
-      return { sourceImages: [] as SourceImage[], tempPaths, totalEntries }
+  imageEntries.sort((a, b) => a.entryName.localeCompare(b.entryName))
+  return { zipFile, imageEntries, totalEntries }
+}
+
+async function processImage(
+  inputPath: string,
+  fullResPath: string,
+  thumbPath: string,
+  shouldRotate: boolean,
+): Promise<{ width: number | null; height: number | null }> {
+  if (shouldRotate) {
+    try {
+      // Read input once into memory so the full-res and thumbnail share a single decode pass.
+      const buffer = await fs.readFile(inputPath)
+      const base = sharp(buffer, { limitInputPixels: MAX_INPUT_PIXELS }).rotate()
+      const [info] = await Promise.all([
+        base.clone().toFile(fullResPath),
+        base.clone()
+          .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 82 })
+          .toFile(thumbPath),
+      ])
+      return { width: info.width ?? null, height: info.height ?? null }
+    } catch {
+      await fs.copyFile(inputPath, fullResPath).catch(() => {})
+      return { width: null, height: null }
     }
+  }
 
-    send({
-      stage: 'extracting',
-      message: `Found ${imageEntries.length} image${imageEntries.length === 1 ? '' : 's'} — creating roll…`,
-    })
-
-    const sourceImages: SourceImage[] = []
-    for (let i = 0; i < imageEntries.length; i++) {
-      const item = imageEntries[i]
-      const { tmpPath, bytesWritten } = await writeZipEntryToTempFile(zipFile, item.entry, MAX_ZIP_ENTRY_BYTES)
-      totalExtractedBytes += bytesWritten
-      if (totalExtractedBytes > MAX_ZIP_TOTAL_BYTES) {
-        throw new Error('Zip exceeds total extraction limit')
-      }
-      tempPaths.push(tmpPath)
-      sourceImages.push({
-        originalName: item.originalName,
-        inputPath: tmpPath,
-      })
-      send({
-        stage: 'extracting',
-        message: `Extracting images… (${i + 1}/${imageEntries.length})`,
-      })
-    }
-
-    return { sourceImages, tempPaths, totalEntries }
-  } finally {
-    zipFile?.close()
+  // rotation = 'off': copy original without re-encoding; thumbnail is a separate lightweight pass.
+  await fs.copyFile(inputPath, fullResPath)
+  try {
+    const [meta] = await Promise.all([
+      sharp(inputPath, { limitInputPixels: MAX_INPUT_PIXELS }).metadata(),
+      sharp(inputPath, { limitInputPixels: MAX_INPUT_PIXELS })
+        .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 82 })
+        .toFile(thumbPath),
+    ])
+    return { width: meta.width ?? null, height: meta.height ?? null }
+  } catch {
+    return { width: null, height: null }
   }
 }
 
@@ -258,12 +268,13 @@ async function runWithConcurrencyLimit<T>(
 
 async function persistPhotos(
   meta: UploadMeta,
-  sourceImages: SourceImage[],
+  source: ImageSource,
   settings: EffectiveImportSettings,
   appSettings: AppSettingsShape,
   send: (data: object) => void,
 ) {
-  const total = sourceImages.length
+  const items = source.kind === 'files' ? source.images : source.entries
+  const total = items.length
   const requestedRollId = meta.rollId?.trim()
   const existingRoll = requestedRollId
     ? await prisma.roll.findUnique({ where: { id: requestedRollId } })
@@ -349,7 +360,8 @@ async function persistPhotos(
   const plannedImages: Array<{
     sourceIndex: number
     createdIndex: number
-    image: SourceImage
+    zipEntry?: yauzl.Entry
+    inputPath?: string
     existing: { id: string; originalName: string; filename: string; order: number } | undefined
     originalName: string
     filename: string
@@ -357,25 +369,27 @@ async function persistPhotos(
   }> = []
 
   for (let i = 0; i < total; i++) {
-    const image = sourceImages[i]
-    const existing = existingByNameMap.get(image.originalName)
+    const rawOriginalName = source.kind === 'files' ? source.images[i].originalName : source.entries[i].originalName
+    const existing = existingByNameMap.get(rawOriginalName)
     if (existing && settings.duplicateHandling === 'skip') {
-      send({ stage: 'processing', current: i + 1, total, name: image.originalName, skipped: true })
+      send({ stage: 'processing', current: i + 1, total, name: rawOriginalName, skipped: true })
       continue
     }
 
     const originalName = existing && settings.duplicateHandling === 'rename'
-      ? makeUniqueOriginalName(image.originalName, usedOriginalNames)
-      : image.originalName
+      ? makeUniqueOriginalName(rawOriginalName, usedOriginalNames)
+      : rawOriginalName
     usedOriginalNames.add(originalName)
 
-    const ext = path.extname(image.originalName).toLowerCase()
+    const ext = path.extname(rawOriginalName).toLowerCase()
     const safeExt = ext || '.jpg'
     const filename = `${String(nextFilenameStart + createdCount).padStart(4, '0')}${safeExt}`
     plannedImages.push({
       sourceIndex: i,
       createdIndex: createdCount,
-      image,
+      ...(source.kind === 'zip'
+        ? { zipEntry: source.entries[i].entry }
+        : { inputPath: source.images[i].inputPath }),
       existing,
       originalName,
       filename,
@@ -384,89 +398,69 @@ async function persistPhotos(
     createdCount += 1
   }
 
+  const shouldRotate = settings.autoRotationPolicy !== 'off'
+  const zipFileRef = source.kind === 'zip' ? source.zipFile : null
+  let totalExtractedBytes = 0
+
   await runWithConcurrencyLimit(plannedImages, MAX_PARALLEL_IMAGE_WORK, async (plan) => {
-    const { sourceIndex, createdIndex, image, existing, originalName, filename, safeExt } = plan
-    const phaseStart = Date.now()
-    send({ stage: 'processing', current: sourceIndex + 1, total, name: image.originalName })
+    const { sourceIndex, createdIndex, existing, originalName, filename, safeExt } = plan
+    const start = Date.now()
+    send({ stage: 'processing', current: sourceIndex + 1, total, name: originalName })
 
-    const decodeStart = Date.now()
-    const inputPipeline = sharp(image.inputPath, { limitInputPixels: MAX_INPUT_PIXELS })
-    const shouldRotate = settings.autoRotationPolicy !== 'off'
-    // Keep originals and thumbnails orientation-normalized the same way to avoid viewer/grid drift.
-    const outputPipeline = shouldRotate ? inputPipeline.rotate() : inputPipeline
-    let outputInfo: sharp.OutputInfo | null = null
-    try {
-      outputInfo = await outputPipeline.toFile(path.join(rollDir, filename))
-    } catch {
-      await fs.copyFile(image.inputPath, path.join(rollDir, filename))
+    let inputPath: string
+    let isTemp = false
+
+    if (plan.zipEntry && zipFileRef) {
+      const { tmpPath, bytesWritten } = await writeZipEntryToTempFile(zipFileRef, plan.zipEntry, MAX_ZIP_ENTRY_BYTES)
+      totalExtractedBytes += bytesWritten
+      if (totalExtractedBytes > MAX_ZIP_TOTAL_BYTES) {
+        await fs.unlink(tmpPath).catch(() => {})
+        throw new Error('Zip exceeds total extraction limit')
+      }
+      inputPath = tmpPath
+      isTemp = true
+    } else {
+      inputPath = plan.inputPath!
     }
-    const decodeMs = Date.now() - decodeStart
-    console.info(
-      `[persistPhotos] decode/write ${sourceIndex + 1}/${total} "${image.originalName}" ${decodeMs}ms`,
-    )
 
-    let width: number | null = null
-    let height: number | null = null
+    const fullResPath = path.join(rollDir, filename)
+    const thumbPath = path.join(thumbDir, `${path.basename(filename, safeExt)}.jpg`)
 
     try {
-      if (outputInfo?.width && outputInfo?.height) {
-        width = outputInfo.width
-        height = outputInfo.height
-      } else {
-        const metaPipeline = sharp(image.inputPath, { limitInputPixels: MAX_INPUT_PIXELS })
-        const meta = await (shouldRotate ? metaPipeline.rotate() : metaPipeline).metadata()
-        width = meta.width ?? null
-        height = meta.height ?? null
+      const { width, height } = await processImage(inputPath, fullResPath, thumbPath, shouldRotate)
+
+      console.info(
+        `[persistPhotos] processed ${sourceIndex + 1}/${total} "${originalName}" in ${Date.now() - start}ms`,
+      )
+
+      const dbData = {
+        filename,
+        originalName,
+        path: `${roll.id}/${filename}`,
+        width,
+        height,
+        order: existing && settings.duplicateHandling === 'replace' ? existing.order : nextOrderStart + createdIndex,
+        frameNumber: frameStart + createdIndex,
       }
 
-      const thumbStart = Date.now()
-      const thumbPipeline = sharp(image.inputPath, { limitInputPixels: MAX_INPUT_PIXELS })
-      await (shouldRotate ? thumbPipeline.rotate() : thumbPipeline)
-        .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 82 })
-        .toFile(path.join(thumbDir, `${path.basename(filename, safeExt)}.jpg`))
-      const thumbMs = Date.now() - thumbStart
-      console.info(
-        `[persistPhotos] thumbnail ${sourceIndex + 1}/${total} "${image.originalName}" ${thumbMs}ms`,
-      )
-    } catch {
-      // Sharp can't process this format — continue without thumbnail
+      if (existing && settings.duplicateHandling === 'replace') {
+        await Promise.all([
+          fs.unlink(path.join(rollDir, existing.filename)).catch(() => {}),
+          fs.unlink(path.join(thumbDir, `${path.basename(existing.filename, path.extname(existing.filename))}.jpg`)).catch(() => {}),
+        ])
+        await prisma.photo.update({ where: { id: existing.id }, data: dbData })
+        existingByNameMap.delete(existing.originalName)
+        existingByNameMap.set(originalName, { ...existing, ...dbData })
+      } else {
+        await prisma.photo.create({ data: { rollId: roll.id, ...dbData } })
+      }
+    } finally {
+      if (isTemp) {
+        await fs.unlink(inputPath).catch(() => {})
+      }
     }
-
-    const dbData = {
-      filename,
-      originalName,
-      path: `${roll.id}/${filename}`,
-      width,
-      height,
-      order: existing && settings.duplicateHandling === 'replace' ? existing.order : nextOrderStart + createdIndex,
-      frameNumber: frameStart + createdIndex,
-    }
-
-    if (existing && settings.duplicateHandling === 'replace') {
-      await Promise.all([
-        fs.unlink(path.join(rollDir, existing.filename)).catch(() => {}),
-        fs.unlink(path.join(thumbDir, `${path.basename(existing.filename, path.extname(existing.filename))}.jpg`)).catch(() => {}),
-      ])
-      await prisma.photo.update({
-        where: { id: existing.id },
-        data: dbData,
-      })
-      existingByNameMap.delete(existing.originalName)
-      existingByNameMap.set(originalName, { ...existing, ...dbData })
-    } else {
-      await prisma.photo.create({
-        data: {
-          rollId: roll.id,
-          ...dbData,
-        },
-      })
-    }
-    const totalMs = Date.now() - phaseStart
-    console.info(
-      `[persistPhotos] complete ${sourceIndex + 1}/${total} "${image.originalName}" ${totalMs}ms`,
-    )
   })
+
   return { rollId: roll.id, count: createdCount, appended: Boolean(existingRoll) }
 }
 
@@ -515,6 +509,7 @@ export async function GET(
     async start(controller) {
       let tmpZip: string | null = null
       let tempImagePaths: string[] = []
+      let openZipFileHandle: yauzl.ZipFile | null = null
 
       const send = (data: object) => {
         try {
@@ -547,7 +542,7 @@ export async function GET(
         tempImagePaths = (meta.imageFiles ?? []).map(file => file.tmpPath)
         await fs.unlink(metaFile).catch(() => {})
 
-        let sourceImages: SourceImage[] = []
+        let source: ImageSource
 
         if (meta.mode === 'zip') {
           if (!meta.tmpZip) {
@@ -557,9 +552,12 @@ export async function GET(
           }
 
           send({ stage: 'extracting', message: 'Opening zip file…' })
-          let zipImages
+
+          let imageEntries: Array<{ entry: yauzl.Entry; originalName: string; entryName: string }>
+          let totalEntries: number
+
           try {
-            zipImages = await collectZipImageFiles(meta.tmpZip, send)
+            ;({ zipFile: openZipFileHandle, imageEntries, totalEntries } = await enumerateZipImageEntries(meta.tmpZip))
           } catch (err) {
             const message = err instanceof Error ? err.message : 'Could not read zip — the file may be corrupt or not a valid zip.'
             send({ stage: 'error', message })
@@ -567,19 +565,25 @@ export async function GET(
             return
           }
 
-          if (zipImages.sourceImages.length === 0) {
+          if (imageEntries.length === 0) {
+            openZipFileHandle?.close()
+            openZipFileHandle = null
             send({
               stage: 'error',
               message:
-                `No image files found in zip (${zipImages.totalEntries} total entr${zipImages.totalEntries === 1 ? 'y' : 'ies'}). ` +
+                `No image files found in zip (${totalEntries} total entr${totalEntries === 1 ? 'y' : 'ies'}). ` +
                 'Supported formats: JPG, TIFF, PNG, HEIC, WebP.',
             })
             controller.close()
             return
           }
 
-          tempImagePaths = [...tempImagePaths, ...zipImages.tempPaths]
-          sourceImages = zipImages.sourceImages
+          send({
+            stage: 'extracting',
+            message: `Found ${imageEntries.length} image${imageEntries.length === 1 ? '' : 's'} — creating roll…`,
+          })
+
+          source = { kind: 'zip', zipFile: openZipFileHandle!, entries: imageEntries }
         } else {
           const sortedFiles = (meta.imageFiles ?? [])
             .filter(file => isImageFile(file.originalName))
@@ -597,10 +601,10 @@ export async function GET(
           const total = sortedFiles.length
           send({ stage: 'extracting', message: `Preparing ${total} uploaded image${total === 1 ? '' : 's'}…` })
 
-          sourceImages = sortedFiles.map(file => ({
-            originalName: file.originalName,
-            inputPath: file.tmpPath,
-          }))
+          source = {
+            kind: 'files',
+            images: sortedFiles.map(file => ({ originalName: file.originalName, inputPath: file.tmpPath })),
+          }
         }
 
         const savedSettings = await prisma.appSettings.findUnique({ where: { id: 'singleton' } })
@@ -623,7 +627,7 @@ export async function GET(
           duplicateHandling: effectiveSettingsRaw.duplicateHandling ?? importDefaults.duplicateHandling,
         }
 
-        const { rollId, count } = await persistPhotos(meta, sourceImages, effectiveSettings, appSettings, send)
+        const { rollId, count } = await persistPhotos(meta, source, effectiveSettings, appSettings, send)
         send({ stage: 'done', rollId, count })
         try { controller.close() } catch { }
       } catch (err) {
@@ -637,6 +641,7 @@ export async function GET(
         send({ stage: 'error', message })
         try { controller.close() } catch { }
       } finally {
+        openZipFileHandle?.close()
         if (tmpZip) {
           await fs.unlink(tmpZip).catch(() => {})
         }

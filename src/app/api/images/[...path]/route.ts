@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs/promises'
+import { createReadStream } from 'fs'
+import { Readable } from 'stream'
 import path from 'path'
 import { getUploadDir } from '@/lib/utils'
 
@@ -16,23 +18,38 @@ const MIME_TYPES: Record<string, string> = {
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
   const { path: segments } = await params
-  // Prevent path traversal
-  const sanitized = segments.map(s => s.replace(/\.\./g, ''))
-  const filePath = path.join(getUploadDir(), ...sanitized)
+
+  // Resolve to an absolute path and verify it stays inside the upload directory.
+  const uploadDir = path.resolve(getUploadDir())
+  const filePath = path.resolve(path.join(uploadDir, ...segments))
+  if (!filePath.startsWith(uploadDir + path.sep)) {
+    return new NextResponse(null, { status: 403 })
+  }
 
   try {
-    const buffer = await fs.readFile(filePath)
+    const stat = await fs.stat(filePath)
+    const etag = `"${stat.mtimeMs.toString(16)}-${stat.size.toString(16)}"`
+
+    if (req.headers.get('if-none-match') === etag) {
+      return new NextResponse(null, { status: 304 })
+    }
+
     const ext = filePath.split('.').pop()?.toLowerCase() ?? 'jpg'
     const contentType = MIME_TYPES[ext] ?? 'application/octet-stream'
 
-    return new NextResponse(buffer, {
+    const fileStream = createReadStream(filePath)
+    const webStream = Readable.toWeb(fileStream) as ReadableStream
+
+    return new NextResponse(webStream, {
       headers: {
         'Content-Type': contentType,
+        'Content-Length': String(stat.size),
         'Cache-Control': 'public, max-age=31536000, immutable',
+        ETag: etag,
       },
     })
   } catch {

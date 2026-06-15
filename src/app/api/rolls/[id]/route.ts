@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { slugify, getUploadDir } from '@/lib/utils'
+import { getUploadDir } from '@/lib/utils'
+import { generateUniqueSlug } from '@/lib/server-utils'
 import fs from 'fs/promises'
 import path from 'path'
 import { DEFAULT_APP_SETTINGS, mapDbAppSettings } from '@/lib/settings'
@@ -36,14 +37,7 @@ export async function PUT(
 
   let slug = existing.slug
   if (name && name.trim() !== existing.name) {
-    const base = slugify(name.trim())
-    slug = base
-    let i = 1
-    while (true) {
-      const conflict = await prisma.roll.findUnique({ where: { slug } })
-      if (!conflict || conflict.id === id) break
-      slug = `${base}-${i++}`
-    }
+    slug = await generateUniqueSlug(name.trim())
   }
 
   const roll = await prisma.roll.update({

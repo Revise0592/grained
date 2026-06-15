@@ -25,6 +25,14 @@ export async function PUT(
   const body = await request.json()
   const { frameNumber, shutterSpeed, aperture, exposureComp, focalLength, notes, rotation } = body
 
+  const VALID_ROTATIONS = new Set([0, 90, 180, 270])
+  if (rotation !== undefined) {
+    const r = Number(rotation)
+    if (!VALID_ROTATIONS.has(r)) {
+      return NextResponse.json({ error: 'rotation must be 0, 90, 180, or 270' }, { status: 400 })
+    }
+  }
+
   const photo = await prisma.photo.update({
     where: { id },
     data: {

@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { Loader2, RotateCcw, Save } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
+import { inputClass, selectClass } from '@/lib/ui'
 import { DEVELOP_PROCESSES, FILM_FORMATS } from '@/lib/film-stocks'
 import { DEFAULT_APP_SETTINGS, normalizeTags, type AppSettingsShape } from '@/lib/settings'
 import { THEME_PALETTE_OPTIONS } from '@/lib/themes'
@@ -79,11 +80,6 @@ function Toggle({
   )
 }
 
-const inputClass =
-  'w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring'
-
-const selectClass =
-  'w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring'
 
 export default function SettingsPage() {
   const { setTheme } = useTheme()
