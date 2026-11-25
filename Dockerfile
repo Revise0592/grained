@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
-RUN npm install
+RUN npm ci
 RUN npx prisma generate
 
 # ──────────────────────────────────────────────
@@ -31,6 +31,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
+# Next standalone binds to $HOSTNAME, which Docker sets to the container id; listen on all interfaces.
+ENV HOSTNAME=0.0.0.0
 ENV DATABASE_URL=file:/data/grained.db
 ENV UPLOAD_DIR=/data/uploads
 
@@ -49,5 +51,9 @@ COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
 
 EXPOSE 3000
+
+# node:24-slim has no wget or curl, so probe with Node itself.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
