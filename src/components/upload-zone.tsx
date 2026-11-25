@@ -36,8 +36,8 @@ function ProgressBar({ percent }: { percent: number }) {
   return (
     <div className="h-1.5 bg-muted rounded-full overflow-hidden">
       <div
-        className="h-full bg-accent transition-all duration-200 ease-out rounded-full"
-        style={{ width: `${Math.max(2, Math.min(100, percent))}%` }}
+        className="h-full w-full origin-left bg-accent transition-transform duration-200 ease-out"
+        style={{ transform: `scaleX(${Math.max(2, Math.min(100, percent)) / 100})` }}
       />
     </div>
   )
@@ -418,28 +418,30 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
           onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
           onClick={() => inputRef.current?.click()}
-          className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer select-none ${
-            dragOver ? 'border-accent bg-accent/5' : 'border-border hover:border-accent/50'
+          className={`flex flex-col items-center justify-center rounded-lg border border-dashed p-6 sm:p-10 text-center transition-colors cursor-pointer select-none sm:min-h-[320px] ${
+            dragOver ? 'border-accent bg-accent/5' : 'border-foreground/20 bg-card hover:border-foreground/40'
           }`}
         >
-          <div className="flex flex-col items-center gap-3">
+          <div className="flex w-full flex-col items-center gap-3">
             <UploadCloud
-              className={`h-10 w-10 ${dragOver ? 'text-accent' : 'text-muted-foreground'}`}
+              className={`hidden sm:block h-8 w-8 ${dragOver ? 'text-accent-ink' : 'text-muted-foreground'}`}
+              strokeWidth={1.5}
             />
             <div>
-              <p className="text-sm font-medium text-foreground">
-                {dragOver ? 'Drop it here' : 'Drag & drop or click to select'}
+              <p className="hidden sm:block text-[17px] font-medium text-foreground">
+                {dragOver ? 'Drop to import' : 'Drop a lab .zip or scans here'}
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Upload one .zip or individual JPG, TIFF, PNG, HEIC, WebP files
+              <p className="sm:hidden text-[15px] text-foreground">A lab .zip or your scans</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                JPG, TIFF, PNG, HEIC or WebP
               </p>
             </div>
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }}
-              className="px-4 py-2 rounded-md bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/90 transition-colors"
+              className="btn btn-primary w-full sm:w-auto mt-2"
             >
-              Browse Files
+              Choose files
             </button>
           </div>
         </div>
@@ -448,11 +450,11 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
       {/* ── File selected, ready to import ─────────────────────────────────────── */}
       {selectedFiles.length > 0 && progress.stage === 'idle' && (
         <>
-          <div className="border border-border rounded-lg p-4 flex items-center gap-3">
+          <div className="border border-border bg-card rounded-lg p-4 flex items-center gap-3">
             {selectionMode === 'zip' ? (
-              <FileArchive className="h-8 w-8 text-accent shrink-0" />
+              <FileArchive className="h-8 w-8 text-accent-ink shrink-0" />
             ) : (
-              <FileImage className="h-8 w-8 text-accent shrink-0" />
+              <FileImage className="h-8 w-8 text-accent-ink shrink-0" />
             )}
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-foreground truncate">
@@ -460,14 +462,14 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
                   ? selectedFiles[0].name
                   : `${selectedFiles.length} image file${selectedFiles.length === 1 ? '' : 's'} selected`}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[13px] font-mono text-muted-foreground tabular-nums">
                 {(selectedFiles.reduce((sum, selectedFile) => sum + selectedFile.size, 0) / 1024 / 1024).toFixed(1)} MB
               </p>
             </div>
             <button
               type="button"
               onClick={reset}
-              className="text-xs text-muted-foreground hover:text-destructive transition-colors shrink-0"
+              className="h-11 sm:h-9 px-2 -mr-2 text-sm text-muted-foreground hover:text-destructive transition-colors shrink-0"
             >
               Remove
             </button>
@@ -475,34 +477,34 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
 
           {!targetRollId && (
             <div>
-              <label className="text-sm font-medium text-foreground block mb-1.5">Roll name</label>
+              <label className="text-sm text-muted-foreground block mb-1.5">Roll name</label>
               <input
                 type="text"
                 value={rollName}
                 onChange={(e) => setRollName(e.target.value)}
                 placeholder="e.g. Summer 2024, Roll 12"
-                className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                className="field"
               />
             </div>
           )}
 
           <div className="grid gap-3 sm:grid-cols-3">
             <div>
-              <label className="text-sm font-medium text-foreground block mb-1.5">Frame start</label>
+              <label className="text-sm text-muted-foreground block mb-1.5">Frame start</label>
               <input
                 type="number"
                 min="0"
                 value={frameNumberStart}
                 onChange={(e) => setFrameNumberStart(e.target.value)}
-                className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                className="field"
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground block mb-1.5">Rotation</label>
+              <label className="text-sm text-muted-foreground block mb-1.5">Rotation</label>
               <select
                 value={autoRotationPolicy}
                 onChange={(e) => setAutoRotationPolicy(e.target.value as AutoRotationPolicy)}
-                className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                className="field"
               >
                 <option value="off">Off</option>
                 <option value="exif-only">EXIF only</option>
@@ -510,11 +512,11 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
               </select>
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground block mb-1.5">Duplicates</label>
+              <label className="text-sm text-muted-foreground block mb-1.5">Duplicates</label>
               <select
                 value={duplicateHandling}
                 onChange={(e) => setDuplicateHandling(e.target.value as DuplicateHandlingPolicy)}
-                className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                className="field"
               >
                 <option value="skip">Skip</option>
                 <option value="rename">Rename</option>
@@ -526,9 +528,9 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
           <button
             type="button"
             onClick={upload}
-            className="w-full py-2.5 rounded-md bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/90 transition-colors"
+            className="btn btn-primary w-full"
           >
-            {targetRollId ? 'Add Photos' : 'Import Roll'}
+            {targetRollId ? 'Add photos' : 'Import roll'}
           </button>
         </>
       )}
@@ -580,9 +582,9 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
       {/* ── Done ─────────────────────────────────────────────────────────────────── */}
       {progress.stage === 'done' && (
         <div className="flex items-center gap-2 py-1 text-sm text-foreground">
-          <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+          <CheckCircle2 className="h-4 w-4 text-accent-ink shrink-0" />
           <span>
-            Imported {progress.count} photo{progress.count !== 1 ? 's' : ''} — redirecting…
+            Imported {progress.count} frame{progress.count !== 1 ? 's' : ''}. Opening the roll…
           </span>
         </div>
       )}
@@ -597,7 +599,7 @@ export function UploadZone({ onSuccess, targetRollId }: UploadZoneProps) {
           <button
             type="button"
             onClick={reset}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+            className="btn btn-secondary"
           >
             Try again
           </button>

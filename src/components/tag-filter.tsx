@@ -15,14 +15,15 @@ export function TagFilter({ tags, activeTag }: TagFilterProps) {
   if (tags.length === 0) return null
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <Tag className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+    <div className="flex items-center gap-2 sm:flex-wrap w-max sm:w-auto">
+      <Tag className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden />
       <button
         onClick={() => router.push('/')}
+        aria-pressed={!activeTag}
         className={cn(
-          'px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
+          'h-9 sm:h-8 px-3 rounded-md text-[13px] font-medium whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           !activeTag
-            ? 'bg-accent text-accent-foreground'
+            ? 'bg-foreground text-background'
             : 'bg-muted text-muted-foreground hover:text-foreground'
         )}
       >
@@ -32,15 +33,16 @@ export function TagFilter({ tags, activeTag }: TagFilterProps) {
         <button
           key={tag.name}
           onClick={() => router.push(`/?tag=${encodeURIComponent(tag.name)}`)}
+          aria-pressed={activeTag === tag.name}
           className={cn(
-            'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
+            'inline-flex items-center gap-1.5 h-9 sm:h-8 px-3 rounded-md text-[13px] font-medium whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
             activeTag === tag.name
-              ? 'bg-accent text-accent-foreground'
+              ? 'bg-foreground text-background'
               : 'bg-muted text-muted-foreground hover:text-foreground'
           )}
         >
           {tag.name}
-          <span className={cn('opacity-60', activeTag === tag.name && 'opacity-80')}>
+          <span className={cn('font-mono tabular-nums opacity-60', activeTag === tag.name && 'opacity-80')}>
             {tag._count.rolls}
           </span>
         </button>
@@ -48,7 +50,7 @@ export function TagFilter({ tags, activeTag }: TagFilterProps) {
       {activeTag && (
         <button
           onClick={() => router.push('/')}
-          className="ml-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          className="ml-1 inline-flex h-9 sm:h-8 items-center gap-1 px-2 text-[13px] text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
         >
           <X className="h-3 w-3" />
           Clear

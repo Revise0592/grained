@@ -10,7 +10,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-file:/data/grained.db}
       UPLOAD_DIR: ${UPLOAD_DIR:-/data/uploads}
       HOSTNAME: "0.0.0.0"
-      AUTH_DISABLED: ${AUTH_DISABLED:-true}
+      AUTH_DISABLED: ${AUTH_DISABLED:-false}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]

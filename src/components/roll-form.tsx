@@ -177,13 +177,13 @@ export function RollForm({ initial, rollId, initialTags }: RollFormProps) {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-8">
+    <form onSubmit={submit} className="divide-y divide-border border-t border-border">
       {error && (
         <div className="px-4 py-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
       )}
 
-      <Section title="Basic Info">
-        <Field label="Roll Name" required>
+      <Section title="Roll">
+        <Field label="Name" required>
           <input
             type="text"
             value={form.name}
@@ -207,9 +207,9 @@ export function RollForm({ initial, rollId, initialTags }: RollFormProps) {
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {tags.map(tag => (
-                  <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-accent/10 text-accent border border-accent/20">
+                  <span key={tag} className="inline-flex items-center gap-1 h-8 pl-2.5 pr-1 rounded-md text-[13px] bg-muted text-foreground">
                     {tag}
-                    <button type="button" onClick={() => removeTag(tag)} className="hover:text-destructive transition-colors ml-0.5">
+                    <button type="button" onClick={() => removeTag(tag)} aria-label={`Remove ${tag}`} className="inline-flex h-6 w-6 items-center justify-center rounded hover:text-destructive transition-colors">
                       <X className="h-3 w-3" />
                     </button>
                   </span>
@@ -237,7 +237,7 @@ export function RollForm({ initial, rollId, initialTags }: RollFormProps) {
                       key={t}
                       type="button"
                       onMouseDown={() => { addTag(t); setShowTagSuggestions(false) }}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+                      className="w-full text-left px-3 py-3 sm:py-2 text-base sm:text-sm hover:bg-muted transition-colors"
                     >
                       {t}
                     </button>
@@ -245,14 +245,14 @@ export function RollForm({ initial, rollId, initialTags }: RollFormProps) {
                 </div>
               )}
             </div>
-            <p className="text-xs text-muted-foreground">Press Enter or comma to add. Tags are shared across rolls.</p>
+            <p className="text-[13px] text-muted-foreground">Press Enter or comma to add. Tags are shared across rolls.</p>
           </div>
         </Field>
       </Section>
 
       <Section title="Film">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Film Stock">
+          <Field label="Film stock">
             <div className="relative">
               <input
                 type="text"
@@ -274,12 +274,12 @@ export function RollForm({ initial, rollId, initialTags }: RollFormProps) {
                       key={s.name}
                       type="button"
                       onMouseDown={() => selectFilmStock(s.name, s.iso ?? null)}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex justify-between items-center gap-2"
+                      className="w-full text-left px-3 py-3 sm:py-2 text-base sm:text-sm hover:bg-muted transition-colors flex justify-between items-center gap-2"
                     >
                       <span>{s.name}</span>
                       <span className="text-xs text-muted-foreground shrink-0">
                         {s.iso ? `ISO ${s.iso}` : ''}
-                        {s.saved && <span className="ml-1.5 text-accent/70">★</span>}
+                        {s.saved && <span className="ml-1.5 text-accent-ink/70">★</span>}
                       </span>
                     </button>
                   ))}
@@ -305,7 +305,7 @@ export function RollForm({ initial, rollId, initialTags }: RollFormProps) {
             />
           </Field>
 
-          <Field label="Push / Pull">
+          <Field label="Push or pull">
             <select value={form.pushPull} onChange={set('pushPull')} className={selectClass}>
               {PUSH_PULL_VALUES.map(v => <option key={v} value={v}>{v === '0' ? 'None (0)' : v}</option>)}
             </select>
@@ -337,7 +337,7 @@ export function RollForm({ initial, rollId, initialTags }: RollFormProps) {
                       key={c.id}
                       type="button"
                       onMouseDown={() => selectCamera(c.name)}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+                      className="w-full text-left px-3 py-3 sm:py-2 text-base sm:text-sm hover:bg-muted transition-colors"
                     >
                       {c.name}
                     </button>
@@ -380,7 +380,7 @@ export function RollForm({ initial, rollId, initialTags }: RollFormProps) {
               {DEVELOP_PROCESSES.map(p => <option key={p}>{p}</option>)}
             </select>
           </Field>
-          <Field label="Date Developed">
+          <Field label="Developed on">
             <input type="date" value={form.dateDeveloped} onChange={set('dateDeveloped')} className={inputClass} />
           </Field>
         </div>
@@ -396,21 +396,21 @@ export function RollForm({ initial, rollId, initialTags }: RollFormProps) {
         />
       </Section>
 
-      <div className="flex gap-3 justify-end pt-2 border-t border-border">
+      <div className="flex flex-col-reverse gap-2 pt-6 sm:flex-row sm:justify-end">
         <button
           type="button"
           onClick={() => router.back()}
-          className="px-4 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          className="btn btn-secondary"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={saving}
-          className="flex items-center gap-2 px-5 py-2 rounded-md bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/90 disabled:opacity-60 transition-colors"
+          className="btn btn-primary sm:min-w-32"
         >
           {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-          {rollId ? 'Save Changes' : 'Create Roll'}
+          {rollId ? 'Save changes' : 'Create roll'}
         </button>
       </div>
     </form>
@@ -419,18 +419,18 @@ export function RollForm({ initial, rollId, initialTags }: RollFormProps) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-4">
-      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{title}</h3>
-      {children}
-    </div>
+    <section className="grid gap-4 py-6 md:grid-cols-[180px_minmax(0,1fr)] md:gap-10 md:py-8">
+      <h2 className="text-[15px] font-medium text-foreground">{title}</h2>
+      <div className="space-y-4 min-w-0">{children}</div>
+    </section>
   )
 }
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="text-sm font-medium text-foreground block mb-1.5">
-        {label}{required && <span className="text-destructive ml-0.5">*</span>}
+      <label className="text-sm text-muted-foreground block mb-1.5">
+        {label}{required && <span className="text-destructive ml-0.5" aria-hidden>*</span>}
       </label>
       {children}
     </div>

@@ -69,6 +69,16 @@ export function createSessionToken() {
   return randomBytes(24).toString('hex')
 }
 
+function sha256(value: string) {
+  return createHash('sha256').update(value).digest()
+}
+
+/** Constant-time check of an `Authorization: Bearer <key>` header. */
+export function hasValidApiKey(authHeader: string | null, apiKey: string) {
+  if (!authHeader?.startsWith('Bearer ')) return false
+  return timingSafeEqual(sha256(authHeader.slice(7)), sha256(apiKey))
+}
+
 export function isValidSessionToken(token: string) {
   return /^[a-f0-9]{48}$/.test(token)
 }

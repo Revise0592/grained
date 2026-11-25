@@ -19,7 +19,7 @@ export async function POST(
 ) {
   const { id } = await params
   const { body } = await request.json()
-  if (!body?.trim()) {
+  if (typeof body !== 'string' || !body.trim()) {
     return NextResponse.json({ error: 'Comment body required' }, { status: 400 })
   }
   const comment = await prisma.rollComment.create({
@@ -32,12 +32,13 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: _rollId } = await params
+  const { id: rollId } = await params
   const { searchParams } = new URL(request.url)
   const commentId = searchParams.get('commentId')
   if (!commentId) {
     return NextResponse.json({ error: 'commentId required' }, { status: 400 })
   }
-  await prisma.rollComment.delete({ where: { id: commentId } })
+  const { count } = await prisma.rollComment.deleteMany({ where: { id: commentId, rollId } })
+  if (count === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return new NextResponse(null, { status: 204 })
 }

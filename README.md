@@ -58,15 +58,15 @@ Open [http://localhost:3000](http://localhost:3000).
 |---|---|---|
 | `DATABASE_URL` | `file:/data/grained.db` | Location of your archive database. |
 | `UPLOAD_DIR` | `/data/uploads` | Folder where original scans and generated files are stored. |
-| `AUTH_DISABLED` | `true` | Explicitly disables authentication for local/public deployments. Set to `false` to use Grained's built-in single-admin auth. |
+| `AUTH_DISABLED` | `false` | Set to `true` to turn off Grained's built-in single-admin auth. Only do this when the app is unreachable from other machines. |
 | `API_KEY` | *(unset)* | Bearer token for API access via middleware protection. |
 | `UPLOAD_TEMP_TTL_MS` | `86400000` | How long temporary upload files are kept before cleanup (in milliseconds). |
 | `ENABLE_LEGACY_CHUNK_UPLOAD` | `false` | Compatibility mode for older chunked upload behavior. |
 
 #### Common deployment patterns
 
-- **Local default:** Leave `AUTH_DISABLED=true` for a simple local archive.
-- **Password-protected:** Set `AUTH_DISABLED=false`, start the app, open `/login`, and create the admin password in the browser on first run.
+- **Password-protected (default):** Start the app, open `/login`, and create the admin password in the browser on first run. Do this straight away: until a password exists, whoever reaches `/login` first can set it.
+- **No auth:** Set `AUTH_DISABLED=true` only for an archive bound to `localhost` or a trusted network. Anyone who can reach the port can then read, change and delete every roll.
 - **API-enabled:** Add `API_KEY` when you want protected API access alongside the web app.
 
 When `AUTH_DISABLED=false`, Grained manages auth state in the database:

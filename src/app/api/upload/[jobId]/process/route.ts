@@ -58,6 +58,14 @@ const MAX_PARALLEL_IMAGE_WORK = 4
 const MAX_INPUT_PIXELS = 100_000_000
 const MAX_ZIP_ENTRY_BYTES = 100 * 1024 * 1024
 const MAX_ZIP_TOTAL_BYTES = 750 * 1024 * 1024
+const MAX_ZIP_ENTRIES = 5000
+
+/** Metadata lives on disk; only trust temp paths this app could have written. */
+function isOwnTempPath(value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  const resolved = path.resolve(value)
+  return path.dirname(resolved) === path.resolve(tmpdir()) && path.basename(resolved).startsWith('grained-')
+}
 
 function openZipFile(filePath: string) {
   return new Promise<yauzl.ZipFile>((resolve, reject) => {
@@ -153,6 +161,10 @@ async function enumerateZipImageEntries(tmpZip: string): Promise<{
       zipFile.on('error', reject)
       zipFile.on('entry', (entry) => {
         totalEntries += 1
+        if (totalEntries > MAX_ZIP_ENTRIES) {
+          reject(new Error(`Zip has more than ${MAX_ZIP_ENTRIES} entries`))
+          return
+        }
         const entryFileName = getZipEntryFileName(entry)
         const isDirectory = looksLikeDirectoryEntry(entry)
         if (!isDirectory) {
@@ -525,8 +537,11 @@ export async function GET(
           const parsed = JSON.parse(await fs.readFile(metaFile, 'utf-8'))
           meta = {
             mode: parsed.mode === 'files' ? 'files' : 'zip',
-            tmpZip: parsed.tmpZip ?? null,
-            imageFiles: Array.isArray(parsed.imageFiles) ? parsed.imageFiles : [],
+            tmpZip: isOwnTempPath(parsed.tmpZip) ? parsed.tmpZip : null,
+            imageFiles: Array.isArray(parsed.imageFiles)
+              ? parsed.imageFiles.filter((file: { tmpPath?: unknown; originalName?: unknown }) =>
+                isOwnTempPath(file?.tmpPath) && typeof file?.originalName === 'string')
+              : [],
             rollName: parsed.rollName ?? '',
             rollId: parsed.rollId,
             settings: parsed.settings ?? {},

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useCallback, useState } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import { X, ChevronLeft, ChevronRight, MessageSquare, Pencil, Check, RotateCcw, RotateCw, Trash2, ChevronUp, ChevronDown } from 'lucide-react'
 import { cn, imageUrl, formatDate, thumbPath } from '@/lib/utils'
 import type { Photo, PhotoComment } from '@prisma/client'
@@ -151,6 +151,24 @@ export function Lightbox({ photos, initialIndex, debugRotation = false, onClose,
     return `/api/images/${thumbPath(p.path)}`
   }
 
+  // Swipe left/right on the photo to move between frames (touch screens).
+  const touchStart = useRef<{ x: number; y: number } | null>(null)
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0]
+    touchStart.current = { x: t.clientX, y: t.clientY }
+  }
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStart.current
+    touchStart.current = null
+    if (!start) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - start.x
+    const dy = t.clientY - start.y
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return
+    if (dx < 0) next()
+    else prev()
+  }
+
   const isTransverse = localRotation === 90 || localRotation === 270
   const imgStyle = {
     transform: `rotate(${localRotation}deg)`,
@@ -162,11 +180,11 @@ export function Lightbox({ photos, initialIndex, debugRotation = false, onClose,
   const infoPanelContent = (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-white/40 truncate">{current.originalName}</p>
+        <p className="text-[13px] font-mono text-white/60 truncate">{current.originalName}</p>
         <button
           onClick={() => editing ? saveForm() : setEditing(true)}
           disabled={saving}
-          className="flex items-center gap-1 text-xs text-white/40 hover:text-accent transition-colors"
+          className="inline-flex h-9 items-center gap-1.5 px-2 -mr-2 rounded-md text-[13px] text-white/70 hover:text-white hover:bg-white/10 transition-colors"
         >
           {editing ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
           {editing ? (saving ? 'Saving…' : 'Save') : 'Edit'}
@@ -174,37 +192,37 @@ export function Lightbox({ photos, initialIndex, debugRotation = false, onClose,
       </div>
 
       {current.width && current.height && (
-        <p className="text-xs text-white/30">{current.width} × {current.height}</p>
+        <p className="text-[13px] font-mono text-white/50 tabular-nums">{current.width} × {current.height}</p>
       )}
 
       <div className="space-y-3">
-        <MetaField label="Frame #" value={photo?.frameNumber?.toString() ?? null} editValue={form.frameNumber} editing={editing} type="number" onChange={v => setForm(f => ({ ...f, frameNumber: v }))} />
+        <MetaField label="Frame" value={photo?.frameNumber?.toString() ?? null} editValue={form.frameNumber} editing={editing} type="number" onChange={v => setForm(f => ({ ...f, frameNumber: v }))} />
         <MetaField label="Shutter" value={photo?.shutterSpeed ?? null} editValue={form.shutterSpeed} editing={editing} placeholder="e.g. 1/250" onChange={v => setForm(f => ({ ...f, shutterSpeed: v }))} />
         <MetaField label="Aperture" value={photo?.aperture ?? null} editValue={form.aperture} editing={editing} placeholder="e.g. f/2.8" onChange={v => setForm(f => ({ ...f, aperture: v }))} />
-        <MetaField label="EV Comp" value={photo?.exposureComp ?? null} editValue={form.exposureComp} editing={editing} placeholder="e.g. +1" onChange={v => setForm(f => ({ ...f, exposureComp: v }))} />
-        <MetaField label="Focal Length" value={photo?.focalLength ?? rollInfo?.lens ?? null} editValue={form.focalLength} editing={editing} placeholder="e.g. 50mm" onChange={v => setForm(f => ({ ...f, focalLength: v }))} />
+        <MetaField label="Exposure comp" value={photo?.exposureComp ?? null} editValue={form.exposureComp} editing={editing} placeholder="e.g. +1" onChange={v => setForm(f => ({ ...f, exposureComp: v }))} />
+        <MetaField label="Focal length" value={photo?.focalLength ?? rollInfo?.lens ?? null} editValue={form.focalLength} editing={editing} placeholder="e.g. 50mm" onChange={v => setForm(f => ({ ...f, focalLength: v }))} />
 
         {editing ? (
           <div>
-            <label className="text-xs text-white/40 block mb-1">Notes</label>
+            <label className="text-[13px] text-white/60 block mb-1.5">Notes</label>
             <textarea
               value={form.notes}
               onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-              className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white resize-none h-20 focus:outline-none focus:border-accent/50"
+              className="w-full bg-white/5 border border-white/15 rounded-md px-3 py-2 text-base sm:text-sm text-white resize-none h-24 focus:outline-none focus:border-white/40"
               placeholder="Frame notes…"
             />
           </div>
         ) : photo?.notes ? (
           <div>
-            <p className="text-xs text-white/40 mb-1">Notes</p>
-            <p className="text-xs text-white/70 leading-relaxed">{photo.notes}</p>
+            <p className="text-[13px] text-white/60 mb-1">Notes</p>
+            <p className="text-sm text-white/85 leading-relaxed">{photo.notes}</p>
           </div>
         ) : null}
 
         {!editing && localRotation !== 0 && (
           <div className="flex justify-between items-baseline gap-2">
-            <span className="text-xs text-white/40">Rotation</span>
-            <span className="text-xs text-white/80">{localRotation}°</span>
+            <span className="text-[13px] text-white/60">Rotation</span>
+            <span className="text-sm font-mono text-white/85">{localRotation}°</span>
           </div>
         )}
       </div>
@@ -212,12 +230,12 @@ export function Lightbox({ photos, initialIndex, debugRotation = false, onClose,
   )
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
+    <div role="dialog" aria-modal="true" aria-label={`Frame ${index + 1} of ${photos.length}`} className="fixed inset-0 z-50 bg-black flex flex-col pb-safe">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 shrink-0">
-        <span className="text-sm text-white/60 font-mono">
+      <div className="flex items-center justify-between pl-4 pr-1 sm:px-3 h-14 shrink-0 border-b border-white/10">
+        <span className="text-[13px] text-white/70 font-mono tabular-nums">
           {index + 1} / {photos.length}
-          {photo?.frameNumber != null && <span className="ml-2 hidden sm:inline">· Frame {photo.frameNumber}</span>}
+          {photo?.frameNumber != null && <span className="ml-2">· fr {photo.frameNumber}</span>}
         </span>
         {debugRotation && (
           <span className="text-xs text-lime-300 font-mono">
@@ -226,36 +244,38 @@ export function Lightbox({ photos, initialIndex, debugRotation = false, onClose,
         )}
 
         <div className="flex items-center gap-0.5">
-          <button onClick={() => rotate('ccw')} title="Rotate left" className="p-2 rounded-md text-white/50 hover:text-white hover:bg-white/10 transition-colors">
+          <button onClick={() => rotate('ccw')} title="Rotate left" aria-label="Rotate left" className="inline-flex h-11 w-11 sm:h-9 sm:w-9 items-center justify-center rounded-md text-white/70 hover:text-white hover:bg-white/10 transition-colors">
             <RotateCcw className="h-4 w-4" />
           </button>
-          <button onClick={() => rotate('cw')} title="Rotate right" className="p-2 rounded-md text-white/50 hover:text-white hover:bg-white/10 transition-colors">
+          <button onClick={() => rotate('cw')} title="Rotate right" aria-label="Rotate right" className="inline-flex h-11 w-11 sm:h-9 sm:w-9 items-center justify-center rounded-md text-white/70 hover:text-white hover:bg-white/10 transition-colors">
             <RotateCw className="h-4 w-4" />
           </button>
 
-          <div className="w-px h-4 bg-white/10 mx-1" />
+          <div className="hidden sm:block w-px h-4 bg-white/10 mx-1" />
 
           {/* Info toggle — mobile only */}
           <button
             onClick={() => setMobilePanel(v => !v)}
             title="Info"
+            aria-label="Frame info and comments"
+            aria-expanded={mobilePanel}
             className={cn(
-              'md:hidden p-2 rounded-md transition-colors',
-              mobilePanel ? 'text-accent bg-white/10' : 'text-white/50 hover:text-white hover:bg-white/10'
+              'md:hidden inline-flex h-11 w-11 items-center justify-center rounded-md transition-colors',
+              mobilePanel ? 'text-white bg-white/10' : 'text-white/70 hover:text-white hover:bg-white/10'
             )}
           >
             <MessageSquare className="h-4 w-4" />
           </button>
 
-          <div className="w-px h-4 bg-white/10 mx-1 md:hidden" />
+          
 
-          <button onClick={deletePhoto} disabled={deleting} title="Delete photo" className="p-2 rounded-md text-white/50 hover:text-red-400 hover:bg-white/10 transition-colors disabled:opacity-30">
+          <button onClick={deletePhoto} disabled={deleting} title="Delete photo" aria-label="Delete photo" className="inline-flex h-11 w-11 sm:h-9 sm:w-9 items-center justify-center rounded-md text-white/70 hover:text-red-400 hover:bg-white/10 transition-colors disabled:opacity-30">
             <Trash2 className="h-4 w-4" />
           </button>
 
-          <div className="w-px h-4 bg-white/10 mx-1" />
+          <div className="hidden sm:block w-px h-4 bg-white/10 mx-1" />
 
-          <button onClick={onClose} className="p-2 rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors">
+          <button onClick={onClose} aria-label="Close" className="inline-flex h-11 w-11 sm:h-9 sm:w-9 items-center justify-center rounded-md text-white/80 hover:text-white hover:bg-white/10 transition-colors">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -264,11 +284,11 @@ export function Lightbox({ photos, initialIndex, debugRotation = false, onClose,
       {/* Main area */}
       <div className="flex flex-1 overflow-hidden min-h-0 relative">
         {/* Photo pane */}
-        <div className="flex-1 flex items-center justify-center relative min-w-0 p-4 overflow-hidden">
+        <div className="flex-1 flex items-center justify-center relative min-w-0 p-2 sm:p-6 overflow-hidden touch-pan-y" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
           <button
             onClick={prev}
             disabled={index === 0}
-            className="absolute left-2 z-10 p-2 rounded-full bg-black/40 text-white/70 hover:text-white hover:bg-black/60 transition-colors disabled:opacity-20"
+            aria-label="Previous frame" className="hidden sm:inline-flex absolute left-3 z-10 h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white/80 hover:text-white hover:bg-white/20 transition-colors disabled:opacity-20"
           >
             <ChevronLeft className="h-6 w-6" />
           </button>
@@ -285,30 +305,30 @@ export function Lightbox({ photos, initialIndex, debugRotation = false, onClose,
           <button
             onClick={next}
             disabled={index === photos.length - 1}
-            className="absolute right-2 z-10 p-2 rounded-full bg-black/40 text-white/70 hover:text-white hover:bg-black/60 transition-colors disabled:opacity-20"
+            aria-label="Next frame" className="hidden sm:inline-flex absolute right-3 z-10 h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white/80 hover:text-white hover:bg-white/20 transition-colors disabled:opacity-20"
           >
             <ChevronRight className="h-6 w-6" />
           </button>
         </div>
 
         {/* Side panel — desktop only */}
-        <div className="hidden md:flex w-72 shrink-0 border-l border-white/10 flex-col bg-black/40 overflow-hidden">
+        <div className="hidden md:flex w-80 shrink-0 border-l border-white/10 flex-col bg-neutral-950 overflow-hidden">
           <div className="flex border-b border-white/10 shrink-0">
             {(['info', 'comments'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setPanel(tab)}
                 className={cn(
-                  'flex-1 py-2.5 text-xs font-medium capitalize transition-colors',
-                  panel === tab ? 'text-white border-b border-accent' : 'text-white/40 hover:text-white/70'
+                  'flex-1 h-11 text-[13px] font-medium transition-colors',
+                  panel === tab ? 'text-white border-b-2 border-accent' : 'text-white/50 hover:text-white/80'
                 )}
               >
                 {tab === 'comments' ? (
                   <span className="flex items-center justify-center gap-1">
-                    <MessageSquare className="h-3 w-3" />
+                    
                     Comments
                     {photo && photo.comments.length > 0 && (
-                      <span className="bg-accent text-accent-foreground text-xs rounded-full w-4 h-4 flex items-center justify-center text-[10px]">
+                      <span className="font-mono text-white/50 tabular-nums">
                         {photo.comments.length}
                       </span>
                     )}
@@ -328,7 +348,7 @@ export function Lightbox({ photos, initialIndex, debugRotation = false, onClose,
 
         {/* Mobile info overlay — slides up from bottom */}
         {mobilePanel && (
-          <div className="md:hidden absolute inset-x-0 bottom-0 bg-black/95 border-t border-white/10 z-20 flex flex-col max-h-[60%]">
+          <div className="md:hidden absolute inset-x-0 bottom-0 bg-neutral-950 border-t border-white/10 rounded-t-xl z-20 flex flex-col max-h-[70%]">
             {/* Tab bar */}
             <div className="flex border-b border-white/10 shrink-0">
               {(['info', 'comments'] as const).map(tab => (
@@ -336,16 +356,16 @@ export function Lightbox({ photos, initialIndex, debugRotation = false, onClose,
                   key={tab}
                   onClick={() => setPanel(tab)}
                   className={cn(
-                    'flex-1 py-2.5 text-xs font-medium capitalize transition-colors',
-                    panel === tab ? 'text-white border-b border-accent' : 'text-white/40 hover:text-white/70'
+                    'flex-1 h-11 text-[13px] font-medium transition-colors',
+                    panel === tab ? 'text-white border-b-2 border-accent' : 'text-white/50 hover:text-white/80'
                   )}
                 >
                   {tab === 'comments' ? (
                     <span className="flex items-center justify-center gap-1">
-                      <MessageSquare className="h-3 w-3" />
+                      
                       Comments
                       {photo && photo.comments.length > 0 && (
-                        <span className="bg-accent text-accent-foreground text-xs rounded-full w-4 h-4 flex items-center justify-center text-[10px]">
+                        <span className="font-mono text-white/50 tabular-nums">
                           {photo.comments.length}
                         </span>
                       )}
@@ -355,7 +375,8 @@ export function Lightbox({ photos, initialIndex, debugRotation = false, onClose,
               ))}
               <button
                 onClick={() => setMobilePanel(false)}
-                className="px-3 text-white/40 hover:text-white transition-colors"
+                aria-label="Hide info"
+                className="w-11 inline-flex items-center justify-center text-white/60 hover:text-white transition-colors"
               >
                 <ChevronDown className="h-4 w-4" />
               </button>
@@ -372,13 +393,15 @@ export function Lightbox({ photos, initialIndex, debugRotation = false, onClose,
 
       {/* Filmstrip — hidden on mobile */}
       {photos.length > 1 && (
-        <div className="hidden sm:flex h-16 shrink-0 items-center gap-1 px-4 overflow-x-auto scrollbar-thin border-t border-white/10">
+        <div className="hidden sm:flex h-[72px] shrink-0 items-center gap-1.5 px-4 overflow-x-auto scrollbar-thin border-t border-white/10">
           {photos.map((p, i) => (
             <button
               key={p.id}
+              aria-label={`Frame ${i + 1}`}
+              aria-current={i === index ? 'true' : undefined}
               onClick={() => setIndex(i)}
               className={cn(
-                'shrink-0 h-12 w-12 rounded overflow-hidden border-2 transition-all',
+                'shrink-0 h-12 w-12 rounded overflow-hidden border-2 transition-[border-color,opacity]',
                 i === index ? 'border-accent' : 'border-transparent opacity-50 hover:opacity-80'
               )}
             >
@@ -410,13 +433,13 @@ function MetaField({
   if (editing) {
     return (
       <div>
-        <label className="text-xs text-white/40 block mb-1">{label}</label>
+        <label className="text-[13px] text-white/60 block mb-1.5">{label}</label>
         <input
           type={type}
           value={editValue}
           onChange={e => onChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-accent/50"
+          className="w-full h-11 sm:h-9 bg-white/5 border border-white/15 rounded-md px-3 text-base sm:text-sm text-white focus:outline-none focus:border-white/40"
         />
       </div>
     )
@@ -424,8 +447,8 @@ function MetaField({
   if (!value) return null
   return (
     <div className="flex justify-between items-baseline gap-2">
-      <span className="text-xs text-white/40 shrink-0">{label}</span>
-      <span className="text-xs text-white/80 text-right">{value}</span>
+      <span className="text-[13px] text-white/60 shrink-0">{label}</span>
+      <span className="text-sm font-mono text-white/90 text-right tabular-nums">{value}</span>
     </div>
   )
 }

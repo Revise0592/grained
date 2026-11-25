@@ -4,7 +4,7 @@
 
 @layer base {
   :root,
-  html[data-palette="classic"] {
+  [data-palette="classic"] {
     --background: 38 25% 96%;
     --foreground: 38 12% 12%;
     --card: 0 0% 100%;
@@ -15,13 +15,15 @@
     --primary: 38 12% 12%;
     --primary-foreground: 38 25% 96%;
     --accent: 28 72% 50%;
-    --accent-foreground: 0 0% 100%;
+    --accent-foreground: 38 12% 12%;
+    --accent-ink: 28 72% 38%;
     --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
     --ring: 38 12% 12%;
     --radius: 0.5rem;
   }
 
-  html[data-palette="classic"].dark {
+  [data-palette="classic"].dark {
     --background: 38 8% 8%;
     --foreground: 38 16% 92%;
     --card: 38 8% 11%;
@@ -32,13 +34,14 @@
     --primary: 38 16% 92%;
     --primary-foreground: 38 8% 8%;
     --accent: 28 72% 50%;
-    --accent-foreground: 0 0% 100%;
+    --accent-foreground: 38 8% 8%;
+    --accent-ink: var(--accent);
     --destructive: 0 62% 50%;
     --ring: 38 16% 92%;
     --radius: 0.5rem;
   }
 
-  html[data-palette="paper"] {
+  [data-palette="paper"] {
     --background: 42 36% 95%;
     --foreground: 28 16% 18%;
     --card: 45 30% 98%;
@@ -49,12 +52,13 @@
     --primary: 28 16% 18%;
     --primary-foreground: 45 30% 98%;
     --accent: 198 44% 42%;
-    --accent-foreground: 45 30% 98%;
+    --accent-foreground: 0 0% 100%;
+    --accent-ink: 198 44% 39%;
     --destructive: 0 72% 50%;
     --ring: 198 44% 42%;
   }
 
-  html[data-palette="paper"].dark {
+  [data-palette="paper"].dark {
     --background: 32 20% 10%;
     --foreground: 42 22% 91%;
     --card: 34 18% 13%;
@@ -66,11 +70,12 @@
     --primary-foreground: 32 20% 10%;
     --accent: 198 45% 58%;
     --accent-foreground: 32 20% 10%;
+    --accent-ink: var(--accent);
     --destructive: 0 62% 54%;
     --ring: 198 45% 58%;
   }
 
-  html[data-palette="sepia"] {
+  [data-palette="sepia"] {
     --background: 32 42% 92%;
     --foreground: 24 30% 18%;
     --card: 34 42% 96%;
@@ -80,13 +85,14 @@
     --muted-foreground: 24 18% 40%;
     --primary: 24 30% 18%;
     --primary-foreground: 34 42% 96%;
-    --accent: 24 62% 44%;
-    --accent-foreground: 34 42% 96%;
+    --accent: 24 62% 43%;
+    --accent-foreground: 0 0% 100%;
+    --accent-ink: 24 62% 39%;
     --destructive: 0 68% 48%;
-    --ring: 24 62% 44%;
+    --ring: 24 62% 43%;
   }
 
-  html[data-palette="sepia"].dark {
+  [data-palette="sepia"].dark {
     --background: 24 20% 9%;
     --foreground: 34 34% 88%;
     --card: 24 18% 12%;
@@ -98,11 +104,12 @@
     --primary-foreground: 24 20% 9%;
     --accent: 28 66% 54%;
     --accent-foreground: 24 20% 9%;
+    --accent-ink: var(--accent);
     --destructive: 0 60% 53%;
     --ring: 28 66% 54%;
   }
 
-  html[data-palette="darkroom"] {
+  [data-palette="darkroom"] {
     --background: 12 18% 95%;
     --foreground: 8 18% 15%;
     --card: 20 20% 98%;
@@ -114,11 +121,12 @@
     --primary-foreground: 20 20% 98%;
     --accent: 8 72% 46%;
     --accent-foreground: 20 20% 98%;
+    --accent-ink: 8 72% 46%;
     --destructive: 0 70% 48%;
     --ring: 8 72% 46%;
   }
 
-  html[data-palette="darkroom"].dark {
+  [data-palette="darkroom"].dark {
     --background: 0 0% 7%;
     --foreground: 30 12% 90%;
     --card: 12 10% 10%;
@@ -130,11 +138,12 @@
     --primary-foreground: 0 0% 7%;
     --accent: 12 80% 56%;
     --accent-foreground: 0 0% 7%;
+    --accent-ink: var(--accent);
     --destructive: 0 66% 52%;
     --ring: 12 80% 56%;
   }
 
-  html[data-palette="kodak-gold-200"] {
+  [data-palette="kodak-gold-200"] {
     --background: 42 72% 94%;
     --foreground: 28 28% 16%;
     --card: 44 78% 97%;
@@ -146,11 +155,12 @@
     --primary-foreground: 44 78% 97%;
     --accent: 38 92% 52%;
     --accent-foreground: 24 34% 14%;
+    --accent-ink: 38 92% 31%;
     --destructive: 0 68% 48%;
     --ring: 38 92% 52%;
   }
 
-  html[data-palette="kodak-gold-200"].dark {
+  [data-palette="kodak-gold-200"].dark {
     --background: 28 18% 8%;
     --foreground: 42 64% 90%;
     --card: 28 22% 11%;
@@ -162,11 +172,12 @@
     --primary-foreground: 28 18% 8%;
     --accent: 40 88% 58%;
     --accent-foreground: 28 18% 8%;
+    --accent-ink: var(--accent);
     --destructive: 0 62% 52%;
     --ring: 40 88% 58%;
   }
 
-  html[data-palette="fuji-superia-x-tra-400"] {
+  [data-palette="fuji-superia-x-tra-400"] {
     --background: 164 28% 94%;
     --foreground: 176 24% 16%;
     --card: 162 34% 97%;
@@ -176,13 +187,14 @@
     --muted-foreground: 176 12% 40%;
     --primary: 176 24% 16%;
     --primary-foreground: 162 34% 97%;
-    --accent: 154 58% 42%;
-    --accent-foreground: 160 34% 96%;
+    --accent: 154 58% 43%;
+    --accent-foreground: 176 24% 16%;
+    --accent-ink: 154 58% 31%;
     --destructive: 0 66% 48%;
-    --ring: 154 58% 42%;
+    --ring: 154 58% 43%;
   }
 
-  html[data-palette="fuji-superia-x-tra-400"].dark {
+  [data-palette="fuji-superia-x-tra-400"].dark {
     --background: 180 18% 8%;
     --foreground: 156 30% 88%;
     --card: 176 18% 11%;
@@ -194,11 +206,12 @@
     --primary-foreground: 180 18% 8%;
     --accent: 146 62% 52%;
     --accent-foreground: 180 18% 8%;
+    --accent-ink: var(--accent);
     --destructive: 0 60% 52%;
     --ring: 146 62% 52%;
   }
 
-  html[data-palette="portra-400"] {
+  [data-palette="portra-400"] {
     --background: 18 36% 95%;
     --foreground: 12 20% 18%;
     --card: 20 42% 98%;
@@ -210,11 +223,12 @@
     --primary-foreground: 20 42% 98%;
     --accent: 18 70% 66%;
     --accent-foreground: 14 30% 18%;
+    --accent-ink: 18 70% 42%;
     --destructive: 0 66% 49%;
     --ring: 18 70% 66%;
   }
 
-  html[data-palette="portra-400"].dark {
+  [data-palette="portra-400"].dark {
     --background: 18 14% 9%;
     --foreground: 24 34% 90%;
     --card: 18 16% 12%;
@@ -226,11 +240,12 @@
     --primary-foreground: 18 14% 9%;
     --accent: 22 74% 70%;
     --accent-foreground: 18 14% 9%;
+    --accent-ink: var(--accent);
     --destructive: 0 60% 53%;
     --ring: 22 74% 70%;
   }
 
-  html[data-palette="lomo-400"] {
+  [data-palette="lomo-400"] {
     --background: 210 24% 95%;
     --foreground: 240 20% 14%;
     --card: 210 28% 98%;
@@ -240,13 +255,14 @@
     --muted-foreground: 230 12% 40%;
     --primary: 240 20% 14%;
     --primary-foreground: 210 28% 98%;
-    --accent: 344 82% 56%;
-    --accent-foreground: 210 28% 98%;
+    --accent: 344 82% 49%;
+    --accent-foreground: 0 0% 100%;
+    --accent-ink: 344 82% 46%;
     --destructive: 0 70% 48%;
-    --ring: 344 82% 56%;
+    --ring: 344 82% 49%;
   }
 
-  html[data-palette="lomo-400"].dark {
+  [data-palette="lomo-400"].dark {
     --background: 232 24% 8%;
     --foreground: 210 30% 92%;
     --card: 232 22% 11%;
@@ -258,6 +274,7 @@
     --primary-foreground: 232 24% 8%;
     --accent: 184 72% 48%;
     --accent-foreground: 232 24% 8%;
+    --accent-ink: var(--accent);
     --destructive: 0 62% 52%;
     --ring: 184 72% 48%;
   }
@@ -270,8 +287,9 @@
   html {
     overflow-y: scroll;
   }
+  :root { --ease: cubic-bezier(.2,.8,.2,1); }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground antialiased font-sans;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
   ::selection {
@@ -279,7 +297,51 @@
   }
 }
 
+@layer components {
+  /* One button system. Hover steps up 1px on fine pointers only; press sinks and scales. */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 h-11 sm:h-9 px-4 rounded-md text-sm font-medium whitespace-nowrap select-none
+      transition-[transform,background-color,border-color,color] duration-150
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background
+      disabled:opacity-60 disabled:pointer-events-none;
+    transition-timing-function: var(--ease);
+  }
+  .btn svg { flex-shrink: 0; }
+  .btn:active { transform: translateY(1px) scale(.985); transition-duration: 90ms; }
+  @media (hover: hover) and (pointer: fine) {
+    .btn:hover { transform: translateY(-1px); }
+    .btn:active { transform: translateY(1px) scale(.985); }
+  }
+  .btn-primary { @apply bg-accent text-accent-foreground hover:bg-accent/90; }
+  .btn-secondary { @apply border border-border bg-background text-foreground hover:bg-muted; }
+  .btn-danger { @apply border border-border bg-background text-muted-foreground hover:text-destructive hover:border-destructive/40; }
+  .btn-icon { @apply px-0 w-11 sm:w-9; }
+
+  /* Fields: 16px on phones so iOS does not zoom, 14px from sm up. */
+  .field {
+    @apply w-full h-11 sm:h-9 rounded-md border border-input bg-background px-3 text-base sm:text-sm text-foreground
+      placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150
+      focus:outline-none focus:border-ring focus:ring-[3px] focus:ring-ring/20;
+  }
+  textarea.field { @apply h-auto py-2; }
+  select.field { @apply appearance-none cursor-pointer pr-8; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23888' stroke-width='1.5' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+
+  /* Linked card: lifts 2px; its photo zooms inside the frame. Fine pointers only. */
+  .card-link { @apply transition-[transform,border-color] duration-200; transition-timing-function: var(--ease); }
+  .zoom { @apply transition-transform duration-[600ms]; transition-timing-function: var(--ease); }
+  @media (hover: hover) and (pointer: fine) {
+    .card-link:hover { transform: translateY(-2px); }
+    .card-link:hover .zoom, a:hover > .zoom-host .zoom, .zoom-host:hover .zoom { transform: scale(1.03); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .btn, .card-link, .zoom { transition: none !important; transform: none !important; }
+  }
+}
+
 @layer utilities {
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--border)) transparent;

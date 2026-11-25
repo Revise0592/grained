@@ -35,22 +35,22 @@ export default function LibraryPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 space-y-10">
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">Library</h1>
-        <p className="text-sm text-muted-foreground mt-1">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 pb-10 sm:pt-10">
+      <div className="pb-6 border-b border-border">
+        <h1 className="text-[28px] leading-9 sm:text-[40px] sm:leading-[48px] font-medium tracking-tight text-foreground">Library</h1>
+        <p className="text-muted-foreground mt-2 max-w-[62ch]">
           Manage your saved cameras and film stocks. Entries are remembered automatically when you save a roll.
         </p>
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p className="py-8 text-sm text-muted-foreground">Loading…</p>
       ) : (
         <>
           <Section
             icon={<Camera className="h-4 w-4" />}
             title="Cameras"
-            emptyMessage="No cameras saved yet. They'll appear here after you save a roll with a camera."
+            emptyMessage="No cameras yet. Save a roll with a camera and it appears here."
           >
             {cameras.map(c => (
               <LibraryRow key={c.id} label={c.name} onDelete={() => deleteCamera(c.id)} />
@@ -59,8 +59,8 @@ export default function LibraryPage() {
 
           <Section
             icon={<Film className="h-4 w-4" />}
-            title="Film Stocks"
-            emptyMessage="No custom film stocks saved yet. They'll appear here after you save a roll with a film stock."
+            title="Film stocks"
+            emptyMessage="No film stocks yet. Save a roll with a film stock and it appears here."
           >
             {filmStocks.map(f => (
               <LibraryRow
@@ -92,19 +92,21 @@ function Section({
   const hasItems = items.filter(Boolean).length > 0
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2 pb-2 border-b border-border">
-        <span className="text-muted-foreground">{icon}</span>
-        <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">{title}</h2>
+    <section className="grid gap-4 py-6 md:grid-cols-[180px_minmax(0,1fr)] md:gap-10 md:py-8 border-b border-border last:border-b-0">
+      <div className="flex items-center gap-2 h-fit">
+        <span className="text-muted-foreground" aria-hidden>{icon}</span>
+        <h2 className="text-[15px] font-medium text-foreground">{title}</h2>
       </div>
+      <div className="min-w-0">
       {hasItems ? (
         <ul className="divide-y divide-border rounded-md border border-border overflow-hidden">
           {children}
         </ul>
       ) : (
-        <p className="text-sm text-muted-foreground py-3">{emptyMessage}</p>
+        <p className="text-muted-foreground">{emptyMessage}</p>
       )}
-    </div>
+      </div>
+    </section>
   )
 }
 
@@ -117,15 +119,15 @@ function LibraryRow({ label, meta, onDelete }: { label: string; meta?: string; o
   }
 
   return (
-    <li className="flex items-center justify-between px-4 py-3 bg-card hover:bg-muted/30 transition-colors">
+    <li className="flex min-h-14 items-center justify-between gap-3 pl-4 pr-2 py-2 bg-card">
       <div className="flex items-center gap-3 min-w-0">
-        <span className="text-sm text-foreground truncate">{label}</span>
-        {meta && <span className="text-xs text-muted-foreground shrink-0">{meta}</span>}
+        <span className="text-[15px] text-foreground truncate">{label}</span>
+        {meta && <span className="font-mono text-xs text-muted-foreground tabular-nums shrink-0">{meta}</span>}
       </div>
       <button
         onClick={handleDelete}
         onBlur={() => setConfirming(false)}
-        className={`shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${
+        className={`btn h-11 sm:h-9 px-3 shrink-0 ${
           confirming
             ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
             : 'text-muted-foreground hover:text-destructive hover:bg-destructive/10'

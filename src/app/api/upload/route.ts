@@ -26,6 +26,8 @@ export const dynamic = 'force-dynamic'
 
 type UploadMode = 'zip' | 'files'
 
+const MAX_UPLOAD_FILES = 1000
+
 type UploadedTempImage = {
   originalName: string
   tmpPath: string
@@ -95,7 +97,13 @@ async function streamToDisk(
       }
     }
 
-    const bb = busboy({ headers: { 'content-type': contentType } })
+    const bb = busboy({
+      headers: { 'content-type': contentType },
+      limits: { files: MAX_UPLOAD_FILES, fields: 20, fieldSize: 64 * 1024, parts: MAX_UPLOAD_FILES + 20 },
+    })
+    bb.on('filesLimit', () => done(() => reject(new UploadLimitError(`Upload at most ${MAX_UPLOAD_FILES} files at once.`))))
+    bb.on('fieldsLimit', () => done(() => reject(new UploadError('Too many form fields.'))))
+    bb.on('partsLimit', () => done(() => reject(new UploadLimitError('Too many parts in upload.'))))
     const openWriters = new Set<Writable>()
     const abortError = new UploadError('Upload was interrupted before completion. Please try again.', 400)
     let totalRequestBytes = 0

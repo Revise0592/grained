@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Loader2, RotateCcw, Save } from 'lucide-react'
+import { Check, Loader2, RotateCcw, Save } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
 import { inputClass, selectClass } from '@/lib/ui'
@@ -29,17 +29,62 @@ type SectionProps = {
 
 function Section({ title, children }: SectionProps) {
   return (
-    <section className="rounded-lg border border-border bg-card p-5 space-y-4">
-      <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">{title}</h2>
-      <div className="grid gap-4 sm:grid-cols-2">{children}</div>
+    <section className="grid gap-4 py-6 md:grid-cols-[180px_minmax(0,1fr)] md:gap-10 md:py-8">
+      <h2 className="text-[15px] font-medium text-foreground">{title}</h2>
+      <div className="grid gap-4 sm:grid-cols-2 min-w-0">{children}</div>
+    </section>
+  )
+}
+
+type Palette = AppSettingsShape['displayPreferences']['palette']
+
+/** Each swatch renders inside its own palette scope, light half and dark half. */
+function PalettePicker({ value, onChange }: { value: Palette; onChange: (palette: Palette) => void }) {
+  return (
+    <section className="grid gap-4 py-6 md:grid-cols-[180px_minmax(0,1fr)] md:gap-10 md:py-8">
+      <h2 id="palette-h" className="text-[15px] font-medium text-foreground">Palette</h2>
+      <div role="radiogroup" aria-labelledby="palette-h" className="grid grid-cols-2 lg:grid-cols-4 gap-3 min-w-0">
+        {THEME_PALETTE_OPTIONS.map(option => {
+          const selected = option.value === value
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(option.value)}
+              className={cn(
+                'card-link group text-left rounded-lg border bg-card p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                selected ? 'border-foreground' : 'border-border hover:border-foreground/30',
+              )}
+            >
+              <span className="grid grid-cols-2 overflow-hidden rounded-md border border-border" aria-hidden>
+                {(['', 'dark'] as const).map(mode => (
+                  <span key={mode || 'light'} data-palette={option.value} className={cn(mode, 'block bg-background p-2')}>
+                    <span className="block h-10 rounded-sm bg-card border border-border p-1.5">
+                      <span className="block h-1.5 w-3/4 rounded-full bg-foreground/80" />
+                      <span className="mt-1 block h-1.5 w-1/2 rounded-full bg-muted-foreground/60" />
+                    </span>
+                    <span className="mt-1.5 block h-2 w-8 rounded-sm bg-accent" />
+                  </span>
+                ))}
+              </span>
+              <span className="mt-2 flex items-center justify-between gap-2 px-1 pb-1">
+                <span className="text-sm text-foreground truncate">{option.label}</span>
+                {selected && <Check className="h-4 w-4 shrink-0 text-accent-ink" aria-hidden />}
+              </span>
+            </button>
+          )
+        })}
+      </div>
     </section>
   )
 }
 
 function Field({ label, children, wide = false }: { label: string; children: ReactNode; wide?: boolean }) {
   return (
-    <label className={cn('space-y-1.5', wide && 'sm:col-span-2')}>
-      <span className="text-sm font-medium text-foreground">{label}</span>
+    <label className={cn('block space-y-1.5', wide && 'sm:col-span-2')}>
+      <span className="block text-sm text-muted-foreground">{label}</span>
       {children}
     </label>
   )
@@ -60,12 +105,12 @@ function Toggle({
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2 text-left transition-colors hover:bg-muted/60"
+      className="sm:col-span-2 flex min-h-11 items-center justify-between gap-4 rounded-md border border-border px-3 py-2 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <span className="text-sm font-medium text-foreground">{label}</span>
+      <span className="text-[15px] text-foreground">{label}</span>
       <span
         className={cn(
-          'relative h-5 w-9 rounded-full transition-colors',
+          'relative h-5 w-9 shrink-0 rounded-full transition-colors',
           checked ? 'bg-accent' : 'bg-muted-foreground/30',
         )}
       >
@@ -178,24 +223,24 @@ export default function SettingsPage() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading settings...
+          Loading settings…
         </div>
       </div>
     )
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 pb-10 sm:pt-10 [&>section:not(:last-child)]:border-b [&>section]:border-border">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between pb-6 border-b border-border">
         <div className="space-y-2">
-          <h1 className="text-xl font-semibold text-foreground">Settings</h1>
-          <p className="text-sm text-muted-foreground">Only live settings are shown here. Everything on this page affects app behavior today.</p>
+          <h1 className="text-[28px] leading-9 sm:text-[40px] sm:leading-[48px] font-medium tracking-tight text-foreground">Settings</h1>
+          <p className="text-muted-foreground">Defaults for new rolls, imports and how the archive looks</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
           <button
             type="button"
             onClick={reset}
-            className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="btn btn-secondary"
           >
             <RotateCcw className="h-4 w-4" />
             Reset
@@ -204,7 +249,7 @@ export default function SettingsPage() {
             type="button"
             onClick={save}
             disabled={saving}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground hover:bg-accent/90 disabled:opacity-60"
+            className="btn btn-primary"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Save
@@ -215,15 +260,15 @@ export default function SettingsPage() {
       {(error || status) && (
         <div
           className={cn(
-            'rounded-md px-4 py-3 text-sm',
-            error ? 'bg-destructive/10 text-destructive' : 'bg-accent/10 text-accent',
+            'mt-6 rounded-md px-4 py-3 text-sm',
+            error ? 'bg-destructive/10 text-destructive' : 'bg-accent/10 text-accent-ink',
           )}
         >
           {error || status}
         </div>
       )}
 
-      <Section title="Metadata Defaults">
+      <Section title="Metadata defaults">
         <Field label="Lab">
           <input
             value={settings.metadataDefaults.defaultLab ?? ''}
@@ -231,7 +276,7 @@ export default function SettingsPage() {
             className={inputClass}
           />
         </Field>
-        <Field label="Develop Process">
+        <Field label="Develop process">
           <select
             value={settings.metadataDefaults.defaultDevelopProcess ?? ''}
             onChange={e => update('metadataDefaults', { defaultDevelopProcess: e.target.value || null })}
@@ -241,7 +286,7 @@ export default function SettingsPage() {
             {DEVELOP_PROCESSES.map(process => <option key={process} value={process}>{process}</option>)}
           </select>
         </Field>
-        <Field label="Film Format">
+        <Field label="Film format">
           <select
             value={settings.metadataDefaults.defaultFilmFormat ?? ''}
             onChange={e => update('metadataDefaults', { defaultFilmFormat: e.target.value || null })}
@@ -265,7 +310,7 @@ export default function SettingsPage() {
             className={inputClass}
           />
         </Field>
-        <Field label="Common Tags" wide>
+        <Field label="Common tags" wide>
           <input
             value={tagText}
             onChange={e => setTagText(e.target.value)}
@@ -275,8 +320,8 @@ export default function SettingsPage() {
         </Field>
       </Section>
 
-      <Section title="Import Defaults">
-        <Field label="Frame Number Start">
+      <Section title="Import defaults">
+        <Field label="First frame number">
           <input
             type="number"
             min="0"
@@ -285,7 +330,7 @@ export default function SettingsPage() {
             className={inputClass}
           />
         </Field>
-        <Field label="Auto Rotation">
+        <Field label="Auto rotation">
           <select
             value={settings.importDefaults.autoRotationPolicy}
             onChange={e => update('importDefaults', { autoRotationPolicy: e.target.value as AppSettingsShape['importDefaults']['autoRotationPolicy'] })}
@@ -305,7 +350,7 @@ export default function SettingsPage() {
         </Field>
       </Section>
 
-      <Section title="Display Preferences">
+      <Section title="Display">
         <Field label="Theme">
           <select
             value={settings.displayPreferences.theme}
@@ -317,16 +362,7 @@ export default function SettingsPage() {
             <option value="system">System</option>
           </select>
         </Field>
-        <Field label="Palette">
-          <select
-            value={settings.displayPreferences.palette}
-            onChange={e => update('displayPreferences', { palette: e.target.value as AppSettingsShape['displayPreferences']['palette'] })}
-            className={selectClass}
-          >
-            {THEME_PALETTE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </Field>
-        <Field label="Grid Density">
+        <Field label="Grid density">
           <select
             value={settings.displayPreferences.gridDensity}
             onChange={e => update('displayPreferences', { gridDensity: e.target.value as AppSettingsShape['displayPreferences']['gridDensity'] })}
@@ -348,7 +384,12 @@ export default function SettingsPage() {
         />
       </Section>
 
-      <Section title="Library Behavior">
+      <PalettePicker
+        value={settings.displayPreferences.palette}
+        onChange={palette => update('displayPreferences', { palette })}
+      />
+
+      <Section title="Library behaviour">
         <Toggle
           label="Save cameras automatically"
           checked={settings.libraryBehavior.saveCamerasAutomatically}
@@ -361,8 +402,8 @@ export default function SettingsPage() {
         />
       </Section>
 
-      <Section title="Data Safety">
-        <Field label="Upload Temp Retention Hours">
+      <Section title="Data safety">
+        <Field label="Keep upload temp files (hours)">
           <input
             type="number"
             min="1"

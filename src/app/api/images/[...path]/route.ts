@@ -32,6 +32,9 @@ export async function GET(
 
   try {
     const stat = await fs.stat(filePath)
+    if (!stat.isFile()) {
+      return new NextResponse(null, { status: 404 })
+    }
     const etag = `"${stat.mtimeMs.toString(16)}-${stat.size.toString(16)}"`
 
     if (req.headers.get('if-none-match') === etag) {
@@ -48,7 +51,10 @@ export async function GET(
       headers: {
         'Content-Type': contentType,
         'Content-Length': String(stat.size),
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        // Scans are private: never let a shared proxy cache keep a copy.
+        'Cache-Control': 'private, max-age=31536000, immutable',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "default-src 'none'; sandbox",
         ETag: etag,
       },
     })

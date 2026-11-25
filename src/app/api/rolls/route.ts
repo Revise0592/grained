@@ -24,7 +24,10 @@ export async function POST(request: NextRequest) {
   const { name, description, filmStock, filmFormat, iso, pushPull, camera, lens,
     dateShotStart, dateShotEnd, lab, dateDeveloped, developProcess, notes, tags } = body
 
-  if (!name?.trim()) {
+  if (tags !== undefined && (!Array.isArray(tags) || !tags.every(t => typeof t === 'string'))) {
+    return NextResponse.json({ error: 'tags must be an array of strings' }, { status: 400 })
+  }
+  if (typeof name !== 'string' || !name.trim()) {
     return NextResponse.json({ error: 'Name is required' }, { status: 400 })
   }
 

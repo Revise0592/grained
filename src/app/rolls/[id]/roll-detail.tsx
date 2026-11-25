@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, Pencil, Trash2, Camera, Star, ImageIcon, CheckSquare, X, Square, Tag, Plus } from 'lucide-react'
+import { ChevronLeft, Pencil, Trash2, Star, ImageIcon, CheckSquare, X, Square, Tag, Plus } from 'lucide-react'
 import { cn, formatDate, imageUrl, thumbPath } from '@/lib/utils'
 import { Lightbox } from '@/components/lightbox'
 import { Comments } from '@/components/comments'
@@ -112,49 +112,47 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
 
   return (
     <>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 pb-10 sm:pt-6">
         {/* Breadcrumb */}
-        <Link href="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4">
+        <Link href="/" className="inline-flex h-11 sm:h-8 items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-2 sm:mb-4">
           <ChevronLeft className="h-3.5 w-3.5" />
-          All Rolls
+          All rolls
         </Link>
 
         {/* Header */}
-        <div className="flex flex-wrap items-start gap-4 justify-between mb-6">
+        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between mb-6 sm:mb-8">
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold text-foreground tracking-tight">{roll.name}</h1>
+            <h1 className="text-[28px] leading-9 sm:text-[40px] sm:leading-[48px] font-medium text-foreground tracking-tight">{roll.name}</h1>
             {roll.description && (
-              <p className="text-sm text-muted-foreground mt-1 max-w-lg">{roll.description}</p>
+              <p className="text-muted-foreground mt-2 max-w-xl leading-relaxed">{roll.description}</p>
             )}
-            <div className="flex flex-wrap gap-2 mt-2.5">
-              {roll.filmStock && (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-accent/10 text-accent border border-accent/20">
-                  <Camera className="h-3 w-3" />
-                  {roll.filmStock}
-                  {roll.iso && ` · ISO ${roll.iso}`}
-                  {roll.pushPull && roll.pushPull !== '0' && ` · ${roll.pushPull}`}
-                </span>
-              )}
-              {roll.filmFormat && (
-                <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border">
-                  {roll.filmFormat}
-                </span>
-              )}
-              {roll.developProcess && (
-                <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border">
-                  {roll.developProcess}
-                </span>
-              )}
-            </div>
+            {/* Edge print: the roll's film details, set like the text along a negative */}
+            {(() => {
+              const edge = [
+                roll.iso ? `ISO ${roll.iso}` : null,
+                roll.pushPull && roll.pushPull !== '0' ? roll.pushPull : null,
+                roll.filmFormat,
+                roll.developProcess,
+              ].filter(Boolean)
+              if (!roll.filmStock && edge.length === 0) return null
+              return (
+                <p className="mt-3 font-mono text-[13px] text-muted-foreground tabular-nums">
+                  {roll.filmStock && <span className="text-accent-ink">{roll.filmStock}</span>}
+                  {edge.map((part, i) => (
+                    <span key={i}>{(roll.filmStock || i > 0) && <span className="px-2 opacity-50">·</span>}{part}</span>
+                  ))}
+                </p>
+              )
+            })()}
             {roll.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
+              <div className="flex flex-wrap gap-1 mt-3">
                 {roll.tags.map(tag => (
                   <Link
                     key={tag.id}
                     href={`/?tag=${encodeURIComponent(tag.name)}`}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground border border-border hover:text-foreground hover:border-foreground/30 transition-colors"
+                    className="inline-flex items-center gap-1 h-8 sm:h-7 px-2.5 rounded-md text-[13px] bg-muted text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    <Tag className="h-2.5 w-2.5" />
+                    <Tag className="h-3 w-3" />
                     {tag.name}
                   </Link>
                 ))}
@@ -162,44 +160,46 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
             )}
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="grid grid-cols-3 gap-2 md:flex md:items-center shrink-0">
             <button
               onClick={() => setShowUploader((open) => !open)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors border border-border"
+              className="btn btn-secondary px-3"
             >
-              <Plus className="h-3.5 w-3.5" />
-              {showUploader ? 'Close uploader' : 'Add photos'}
+              <Plus className="h-4 w-4" />
+              {showUploader ? 'Close' : 'Add photos'}
             </button>
             <Link
               href={`/rolls/${roll.id}/edit`}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors border border-border"
+              className="btn btn-secondary px-3"
             >
-              <Pencil className="h-3.5 w-3.5" />
+              <Pencil className="h-4 w-4" />
               Edit
             </Link>
             <button
               onClick={deleteRoll}
               disabled={deleting}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors border border-border"
+              className="btn btn-danger px-3"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="h-4 w-4" />
               Delete
             </button>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-0 border-b border-border mb-6">
+        <div role="tablist" className="flex gap-0 border-b border-border mb-4 sm:mb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
           {([
-            { key: 'photos', label: `Photos${photos.length ? ` (${photos.length})` : ''}` },
+            { key: 'photos', label: `Frames${photos.length ? ` ${photos.length}` : ''}` },
             { key: 'info', label: 'Info' },
-            { key: 'comments', label: `Comments${roll.comments.length ? ` (${roll.comments.length})` : ''}` },
+            { key: 'comments', label: `Comments${roll.comments.length ? ` ${roll.comments.length}` : ''}` },
           ] as const).map(t => (
             <button
               key={t.key}
+              role="tab"
+              aria-selected={tab === t.key}
               onClick={() => { setTab(t.key); exitSelectMode() }}
               className={cn(
-                'px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+                'h-11 px-4 text-[15px] border-b-2 -mb-px transition-colors focus-visible:outline-none focus-visible:bg-muted',
                 tab === t.key ? 'border-accent text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
               )}
             >
@@ -223,8 +223,8 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
             )}
             {photos.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 text-center">
-                <ImageIcon className="h-12 w-12 text-muted-foreground/30 mb-3" />
-                <p className="text-muted-foreground text-sm">No photos in this roll yet.</p>
+                <ImageIcon className="h-8 w-8 text-muted-foreground mb-3" strokeWidth={1.5} />
+                <p className="text-muted-foreground text-sm">No photos in this roll yet</p>
               </div>
             ) : (
               <>
@@ -232,10 +232,10 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
                 <div className="flex items-center justify-between mb-3">
                   {selectMode ? (
                     <div className="flex items-center gap-3">
-                      <span className="text-sm text-muted-foreground">
+                      <span className="text-sm text-muted-foreground tabular-nums">
                         {selected.size} selected
                       </span>
-                      <button onClick={selectAll} className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2">
+                      <button onClick={selectAll} className="h-11 sm:h-auto text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4">
                         Select all
                       </button>
                     </div>
@@ -249,33 +249,33 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
                           <button
                             onClick={deleteSelected}
                             disabled={deletingSelected}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-destructive hover:bg-destructive/10 border border-destructive/30 transition-colors disabled:opacity-50"
+                            className="btn btn-danger text-destructive px-3"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Trash2 className="h-4 w-4" />
                             Delete {selected.size}
                           </button>
                         )}
                         <button
                           onClick={exitSelectMode}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-colors"
+                          className="btn btn-secondary px-3"
                         >
-                          <X className="h-3.5 w-3.5" />
+                          <X className="h-4 w-4" />
                           Cancel
                         </button>
                       </>
                     ) : (
                       <button
                         onClick={enterSelectMode}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-colors"
+                        className="btn btn-secondary px-3"
                       >
-                        <CheckSquare className="h-3.5 w-3.5" />
+                        <CheckSquare className="h-4 w-4" />
                         Select
                       </button>
                     )}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-1 sm:gap-2 -mx-4 sm:mx-0">
                   {photos.map((photo, i) => (
                     <PhotoTile
                       key={photo.id}
@@ -304,7 +304,7 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
 
         {/* Info tab */}
         {tab === 'info' && (
-          <div className="max-w-lg space-y-6">
+          <div className="grid gap-8 md:grid-cols-2 md:gap-x-16 max-w-4xl">
             <InfoSection title="Film">
               <InfoRow label="Stock" value={roll.filmStock} />
               <InfoRow label="Format" value={roll.filmFormat} />
@@ -331,8 +331,8 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
               <InfoRow label="Process" value={roll.developProcess} />
             </InfoSection>
             {roll.notes && (
-              <InfoSection title="Notes">
-                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{roll.notes}</p>
+              <InfoSection title="Notes" wide>
+                <p className="pt-3 text-foreground leading-relaxed whitespace-pre-wrap max-w-[62ch]">{roll.notes}</p>
               </InfoSection>
             )}
           </div>
@@ -340,7 +340,7 @@ export function RollDetail({ roll: initial }: { roll: RollWithRelations }) {
 
         {/* Comments tab */}
         {tab === 'comments' && (
-          <div className="max-w-lg">
+          <div className="max-w-2xl">
             <Comments rollId={roll.id} initialComments={roll.comments} />
           </div>
         )}
@@ -381,16 +381,21 @@ function PhotoTile({
   return (
     <div
       className={cn(
-        'relative aspect-square group cursor-pointer rounded overflow-hidden bg-muted',
-        isCover && !selectMode && 'ring-2 ring-accent ring-offset-2 ring-offset-background',
-        selected && 'ring-2 ring-accent ring-offset-2 ring-offset-background'
+        'zoom-host relative aspect-square group cursor-pointer sm:rounded overflow-hidden bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        isCover && !selectMode && 'ring-2 ring-inset ring-accent',
+        selected && 'ring-2 ring-inset ring-accent'
       )}
       onClick={onClick}
+      role="button"
+      tabIndex={0}
+      aria-label={`Frame ${photo.frameNumber ?? index + 1}${selectMode ? (selected ? ', selected' : '') : ''}`}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
     >
+      <div className="zoom h-full w-full">
       <img
         src={thumbUrl}
         alt={photo.originalName}
-        className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+        className="w-full h-full object-cover"
         style={{
           transform: `rotate(${rotation}deg)${isTransverse ? ' scale(1.5)' : ''}`,
         }}
@@ -401,6 +406,7 @@ function PhotoTile({
           t.src = imageUrl(photo.path)
         }}
       />
+      </div>
 
       {/* Select mode overlay — pointer-events-none so clicks reach parent */}
       {selectMode && (
@@ -419,21 +425,25 @@ function PhotoTile({
 
       {/* Normal mode overlay — pointer-events-none except the star button */}
       {!selectMode && (
-        <div className="absolute inset-0 pointer-events-none bg-black/0 group-hover:bg-black/30 transition-all flex items-end justify-between p-1.5">
+        <div className="absolute inset-0 pointer-events-none bg-black/0 group-hover:bg-black/30 transition-colors flex items-end justify-between p-1.5">
           {photo.frameNumber != null && (
-            <span className="text-[10px] font-mono text-white/80 bg-black/40 rounded px-1 py-0.5">
+            <span className="text-xs font-mono tabular-nums text-white bg-black/50 rounded px-1 py-px">
               {photo.frameNumber}
             </span>
           )}
           <button
             onClick={e => { e.stopPropagation(); onSetCover() }}
             title="Set as cover"
+            aria-label={isCover ? 'Cover frame' : 'Set as cover'}
+            aria-pressed={isCover}
             className={cn(
-              'pointer-events-auto p-1 rounded transition-all',
-              isCover ? 'text-accent opacity-100' : 'text-white/0 group-hover:text-white/60 hover:text-accent'
+              'pointer-events-auto -m-1 p-2 rounded transition-colors',
+              isCover
+                ? 'text-accent opacity-100'
+                : 'text-white/45 [@media(hover:hover)]:text-white/0 group-hover:text-white/70 hover:!text-accent focus-visible:text-white'
             )}
           >
-            <Star className="h-3.5 w-3.5" fill={isCover ? 'currentColor' : 'none'} />
+            <Star className="h-4 w-4 drop-shadow" fill={isCover ? 'currentColor' : 'none'} />
           </button>
         </div>
       )}
@@ -448,21 +458,21 @@ function PhotoTile({
   )
 }
 
-function InfoSection({ title, children }: { title: string; children: React.ReactNode }) {
+function InfoSection({ title, children, wide }: { title: string; children: React.ReactNode; wide?: boolean }) {
   return (
-    <div>
-      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">{title}</h3>
-      <div className="space-y-2">{children}</div>
-    </div>
+    <section className={cn(wide && 'md:col-span-2')}>
+      <h2 className="text-[15px] font-medium text-foreground pb-2 mb-1 border-b border-border">{title}</h2>
+      {wide ? <div>{children}</div> : <dl className="divide-y divide-border">{children}</dl>}
+    </section>
   )
 }
 
 function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
   if (!value) return null
   return (
-    <div className="flex gap-4 text-sm">
-      <span className="text-muted-foreground w-24 shrink-0">{label}</span>
-      <span className="text-foreground">{value}</span>
+    <div className="flex items-baseline justify-between gap-4 py-2.5">
+      <dt className="text-sm text-muted-foreground shrink-0">{label}</dt>
+      <dd className="text-[15px] text-foreground text-right tabular-nums">{value}</dd>
     </div>
   )
 }

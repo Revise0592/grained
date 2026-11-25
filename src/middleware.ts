@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from './lib/db'
-import { SESSION_COOKIE, buildSessionCookieOptions, isValidSessionToken } from './lib/auth'
+import { SESSION_COOKIE, buildSessionCookieOptions, hasValidApiKey, isValidSessionToken } from './lib/auth'
 import { getAuthConfig } from './lib/auth-config'
 import { getAuthState } from './lib/auth-state'
 
@@ -22,16 +22,45 @@ function setupRequiredResponse(request: NextRequest) {
   return NextResponse.redirect(new URL('/login', request.url))
 }
 
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+// Reject state-changing requests that a browser sent from another site.
+// Sec-Fetch-Site is set by the browser and survives reverse proxies that rewrite Host,
+// so it is checked first; Origin is the fallback for older browsers.
+function isCrossSiteWrite(request: NextRequest) {
+  if (SAFE_METHODS.has(request.method)) return false
+
+  const fetchSite = request.headers.get('sec-fetch-site')
+  if (fetchSite) return fetchSite !== 'same-origin' && fetchSite !== 'none'
+
+  const origin = request.headers.get('origin')
+  if (!origin) return false // Non-browser clients (curl, scripts) send no Origin.
+
+  let originHost: string
+  try {
+    originHost = new URL(origin).host
+  } catch {
+    return true
+  }
+  const host = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim() || request.headers.get('host')
+  return !host || originHost !== host
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const authConfig = getAuthConfig()
+
+  if (isCrossSiteWrite(request)) {
+    return NextResponse.json({ error: 'Cross-site request blocked' }, { status: 403 })
+  }
+
   if (authConfig.disabled) return NextResponse.next()
 
   if (pathname === '/api/health') {
     return NextResponse.next()
   }
 
-  if (pathname.startsWith('/login') || pathname.startsWith('/api/auth/') || pathname === '/api/stats') {
+  if (pathname.startsWith('/login') || pathname.startsWith('/api/auth/')) {
     return NextResponse.next()
   }
 
@@ -40,11 +69,8 @@ export async function middleware(request: NextRequest) {
     return setupRequiredResponse(request)
   }
 
-  if (authConfig.apiKey) {
-    const authHeader = request.headers.get('authorization')
-    if (authHeader === `Bearer ${authConfig.apiKey}`) {
-      return NextResponse.next()
-    }
+  if (authConfig.apiKey && hasValidApiKey(request.headers.get('authorization'), authConfig.apiKey)) {
+    return NextResponse.next()
   }
 
   const token = request.cookies.get(SESSION_COOKIE)?.value

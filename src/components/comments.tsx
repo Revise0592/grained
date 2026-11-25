@@ -44,37 +44,37 @@ export function Comments({ rollId, photoId, initialComments, dark }: CommentsPro
   }
 
   const inputClass = dark
-    ? 'w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-accent/50 resize-none'
-    : 'w-full bg-background border border-input rounded-md px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none'
+    ? 'w-full bg-white/5 border border-white/15 rounded-md px-3 py-2 text-base sm:text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-white/40 resize-none'
+    : 'field resize-none'
 
-  const textClass = dark ? 'text-white/70' : 'text-foreground'
-  const mutedClass = dark ? 'text-white/30' : 'text-muted-foreground'
+  const textClass = dark ? 'text-white/85' : 'text-foreground'
+  const mutedClass = dark ? 'text-white/50' : 'text-muted-foreground'
   const btnClass = dark
-    ? 'p-1.5 text-white/30 hover:text-accent transition-colors'
-    : 'p-1.5 text-muted-foreground hover:text-destructive transition-colors'
+    ? 'inline-flex h-11 w-11 sm:h-8 sm:w-8 items-center justify-center rounded-md text-white/50 hover:text-red-400 transition-colors'
+    : 'inline-flex h-11 w-11 sm:h-8 sm:w-8 items-center justify-center rounded-md text-muted-foreground hover:text-destructive transition-colors'
   const submitClass = dark
-    ? 'p-1.5 text-white/40 hover:text-accent disabled:opacity-30 transition-colors'
-    : 'p-1.5 text-muted-foreground hover:text-accent disabled:opacity-30 transition-colors'
+    ? 'btn btn-icon shrink-0 border border-white/15 text-white/80 hover:bg-white/10 disabled:opacity-30'
+    : 'btn btn-icon btn-secondary shrink-0 disabled:opacity-40'
 
   return (
     <div className="space-y-4">
       {comments.length === 0 && (
-        <p className={cn('text-xs', mutedClass)}>No comments yet.</p>
+        <p className={cn('text-sm', mutedClass)}>No comments yet</p>
       )}
 
       {comments.map(comment => (
         <div key={comment.id} className="group space-y-1">
           <div className="flex items-start gap-2">
-            <p className={cn('text-xs flex-1 leading-relaxed', textClass)}>{comment.body}</p>
+            <p className={cn('text-[15px] flex-1 leading-relaxed whitespace-pre-wrap', textClass)}>{comment.body}</p>
             <button
               onClick={() => deleteComment(comment.id)}
-              className={cn('opacity-0 group-hover:opacity-100 shrink-0', btnClass)}
+              className={cn('-mt-2 -mr-2 shrink-0 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-visible:opacity-100', btnClass)}
               aria-label="Delete comment"
             >
-              <Trash2 className="h-3 w-3" />
+              <Trash2 className="h-4 w-4" />
             </button>
           </div>
-          <p className={cn('text-[10px]', mutedClass)}>{formatDate(comment.createdAt)}</p>
+          <p className={cn('text-[13px] tabular-nums', mutedClass)}>{formatDate(comment.createdAt)}</p>
         </div>
       ))}
 
@@ -83,13 +83,14 @@ export function Comments({ rollId, photoId, initialComments, dark }: CommentsPro
           value={body}
           onChange={e => setBody(e.target.value)}
           placeholder="Add a comment…"
+          aria-label="Comment"
           rows={2}
           className={cn('flex-1', inputClass)}
           onKeyDown={e => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(e)
           }}
         />
-        <button type="submit" disabled={submitting || !body.trim()} className={submitClass}>
+        <button type="submit" disabled={submitting || !body.trim()} aria-label="Post comment" className={submitClass}>
           <Send className="h-4 w-4" />
         </button>
       </form>

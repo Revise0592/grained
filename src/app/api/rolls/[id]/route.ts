@@ -32,6 +32,13 @@ export async function PUT(
   const { name, description, filmStock, filmFormat, iso, pushPull, camera, lens,
     dateShotStart, dateShotEnd, lab, dateDeveloped, developProcess, notes, coverPhotoId, tags } = body
 
+  if (tags !== undefined && (!Array.isArray(tags) || !tags.every(t => typeof t === 'string'))) {
+    return NextResponse.json({ error: 'tags must be an array of strings' }, { status: 400 })
+  }
+  if (name !== undefined && typeof name !== 'string') {
+    return NextResponse.json({ error: 'name must be a string' }, { status: 400 })
+  }
+
   const existing = await prisma.roll.findUnique({ where: { id } })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 

@@ -14,7 +14,7 @@ export default async function Home({
 }) {
   const { tag } = await searchParams
 
-  const [rolls, allTags, appSettings] = await Promise.all([
+  const [rolls, allTags, appSettings, frameCount] = await Promise.all([
     prisma.roll.findMany({
       where: tag ? { tags: { some: { name: tag } } } : undefined,
       orderBy: { createdAt: 'desc' },
@@ -33,53 +33,52 @@ export default async function Home({
       include: { _count: { select: { rolls: true } } },
     }),
     prisma.appSettings.findUnique({ where: { id: 'singleton' } }),
+    prisma.photo.count(),
   ])
   const displayPreferences = appSettings
     ? mapDbAppSettings(appSettings).displayPreferences
     : DEFAULT_APP_SETTINGS.displayPreferences
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-      {allTags.length > 0 && (
-        <div className="mb-6">
-          <TagFilter tags={allTags} activeTag={tag} />
-        </div>
-      )}
+  const totalRolls = tag ? null : rolls.length
 
-      {rolls.length === 0 ? (
-        tag ? (
-          <div className="flex flex-col items-center justify-center min-h-[40vh] text-center px-4">
-            <p className="text-muted-foreground text-sm">No rolls tagged &ldquo;{tag}&rdquo;.</p>
-            <Link href="/" className="mt-3 text-sm text-accent hover:underline">
-              View all rolls
-            </Link>
-          </div>
-        ) : (
-          <EmptyState />
-        )
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 pb-10 sm:pt-10">
+      {rolls.length === 0 && !tag ? (
+        <EmptyState />
       ) : (
         <>
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-xl font-semibold text-foreground">
+          <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 mb-6">
+            <div className="min-w-0">
+              <h1 className="text-2xl sm:text-[32px] sm:leading-10 font-medium tracking-tight text-foreground">
                 {tag ? (
-                  <span>
-                    <span className="text-muted-foreground font-normal">Tagged: </span>
-                    {tag}
-                  </span>
-                ) : 'All Rolls'}
+                  <><span className="text-muted-foreground">Tagged </span>{tag}</>
+                ) : 'Rolls'}
               </h1>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {rolls.length} {rolls.length === 1 ? 'roll' : 'rolls'}{tag ? ' with this tag' : ' in the archive'}
+              <p className="mt-1 font-mono text-[13px] text-muted-foreground tabular-nums">
+                {rolls.length} {rolls.length === 1 ? 'roll' : 'rolls'}
+                {totalRolls !== null && <> · {frameCount.toLocaleString()} {frameCount === 1 ? 'frame' : 'frames'}</>}
               </p>
             </div>
-          </div>
+          </header>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-            {rolls.map(roll => (
-              <RollCard key={roll.id} roll={roll} preferences={displayPreferences} />
-            ))}
-          </div>
+          {allTags.length > 0 && (
+            <div className="-mx-4 px-4 sm:mx-0 sm:px-0 mb-6 overflow-x-auto no-scrollbar">
+              <TagFilter tags={allTags} activeTag={tag} />
+            </div>
+          )}
+
+          {rolls.length === 0 ? (
+            <div className="flex flex-col items-start py-16">
+              <p className="text-muted-foreground">No rolls tagged &ldquo;{tag}&rdquo;</p>
+              <Link href="/" className="btn btn-secondary mt-4">View all rolls</Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-5">
+              {rolls.map(roll => (
+                <RollCard key={roll.id} roll={roll} preferences={displayPreferences} />
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -88,20 +87,18 @@ export default async function Home({
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-      <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-        <Film className="h-8 w-8 text-muted-foreground/50" />
-      </div>
-      <h2 className="text-xl font-semibold text-foreground">Your archive is empty</h2>
-      <p className="text-sm text-muted-foreground mt-2 max-w-sm">
-        Import a roll from a lab .zip or create one manually to start building your film archive.
+    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+      <Film className="h-8 w-8 text-muted-foreground mb-4" strokeWidth={1.5} />
+      <h1 className="text-2xl font-medium tracking-tight text-foreground">Your archive is empty</h1>
+      <p className="text-muted-foreground mt-2 max-w-sm leading-relaxed">
+        Import a lab scan .zip or create a roll by hand. Grained keeps the frames, stock and notes together.
       </p>
       <Link
         href="/rolls/new"
-        className="mt-6 flex items-center gap-2 px-5 py-2.5 rounded-md bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/90 transition-colors"
+        className="btn btn-primary mt-6"
       >
         <Plus className="h-4 w-4" />
-        Add Your First Roll
+        Add your first roll
       </Link>
     </div>
   )

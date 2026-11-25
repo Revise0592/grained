@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db'
 import { DEFAULT_APP_SETTINGS, mapDbAppSettings } from '@/lib/settings'
 import {
   ensureUploadTempCapacity,
+  isLegacyChunkUploadEnabled,
   getDirectorySize,
   MAX_LEGACY_CHUNKS,
   MAX_LEGACY_CHUNK_BYTES,
@@ -30,6 +31,10 @@ async function getUploadTempTtlMs() {
 }
 
 export async function POST(request: NextRequest) {
+  if (!isLegacyChunkUploadEnabled()) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
   const jobId = request.headers.get('x-job-id') ?? ''
   const chunkIndex = parseInt(request.headers.get('x-chunk-index') ?? '', 10)
   const totalChunks = parseInt(request.headers.get('x-total-chunks') ?? '', 10)

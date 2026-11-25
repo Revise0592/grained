@@ -64,11 +64,11 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
+    <div className="min-h-[100dvh] flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
-          <Film className="h-10 w-10 text-accent mb-3" />
-          <h1 className="text-2xl font-semibold text-foreground tracking-tight">Grained</h1>
+          <Film className="h-8 w-8 text-accent-ink mb-4" strokeWidth={1.5} />
+          <h1 className="text-2xl font-medium text-foreground tracking-tight">Grained</h1>
           <p className="text-sm text-muted-foreground mt-1">Enter your password to continue</p>
         </div>
 
@@ -80,8 +80,10 @@ export default function LoginForm() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="Password"
+              aria-label="Password"
+              autoComplete="current-password"
               autoFocus
-              className="w-full pl-10 pr-4 py-2.5 border border-input rounded-md bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              className="field sm:h-11 pl-10"
             />
           </div>
 
@@ -92,14 +94,14 @@ export default function LoginForm() {
           <button
             type="submit"
             disabled={loading || !password}
-            className="w-full py-2.5 rounded-md bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
+            className="btn btn-primary w-full sm:h-11"
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-muted-foreground">
-          <Link href="/login/reset" className="underline underline-offset-4 hover:text-foreground">
+        <p className="mt-2 text-center text-sm text-muted-foreground">
+          <Link href="/login/reset" className="inline-flex h-11 items-center underline underline-offset-4 hover:text-foreground">
             Reset admin password
           </Link>
         </p>

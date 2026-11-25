@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { hashResetToken, updateAdminPassword } from '@/lib/auth'
+import { hashResetToken, updateAdminPassword, validatePassword } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { revokeAllSessions } from '@/lib/auth-state'
 
@@ -30,6 +30,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Reset token is invalid or has expired.' }, { status: 400 })
   }
 
+  const passwordError = validatePassword(body.password)
+  if (passwordError) {
+    return NextResponse.json({ error: passwordError }, { status: 400 })
+  }
+
+  // Claim the token atomically so two concurrent requests cannot both use it.
+  const claimed = await prisma.passwordResetToken.updateMany({
+    where: { id: resetToken.id, usedAt: null, expiresAt: { gt: new Date() } },
+    data: { usedAt: new Date() },
+  })
+  if (claimed.count !== 1) {
+    return NextResponse.json({ error: 'Reset token is invalid or has expired.' }, { status: 400 })
+  }
+
   try {
     await updateAdminPassword(body.password)
   } catch (error) {
@@ -37,10 +51,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 400 })
   }
 
-  await prisma.passwordResetToken.update({
-    where: { id: resetToken.id },
-    data: { usedAt: new Date() },
-  })
   await revokeAllSessions()
 
   return NextResponse.json({ ok: true })

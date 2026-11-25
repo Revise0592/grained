@@ -29,7 +29,7 @@ export async function POST() {
     try {
       const imgBuffer = await fs.readFile(originalPath)
 
-      const rotated = sharp(imgBuffer).rotate()
+      const rotated = sharp(imgBuffer, { limitInputPixels: 100_000_000 }).rotate()
       const meta = await rotated.clone().metadata()
       const width = meta.width ?? null
       const height = meta.height ?? null

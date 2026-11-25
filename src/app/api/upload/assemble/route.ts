@@ -3,6 +3,7 @@ import path from 'path'
 import fs from 'fs/promises'
 import { createWriteStream } from 'fs'
 import { tmpdir } from 'os'
+import { isLegacyChunkUploadEnabled, MAX_LEGACY_CHUNKS } from '@/lib/upload-temp'
 import {
   ImportSettings,
   ImportSettingsValidationError,
@@ -14,6 +15,10 @@ import {
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
+  if (!isLegacyChunkUploadEnabled()) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
   let body: {
     jobId?: unknown
     totalChunks?: unknown
@@ -34,7 +39,7 @@ export async function POST(request: NextRequest) {
   if (typeof jobId !== 'string' || !/^[0-9a-f]{32}$/.test(jobId)) {
     return NextResponse.json({ error: 'Invalid job ID' }, { status: 400 })
   }
-  if (typeof totalChunks !== 'number' || !Number.isInteger(totalChunks) || totalChunks <= 0) {
+  if (typeof totalChunks !== 'number' || !Number.isInteger(totalChunks) || totalChunks <= 0 || totalChunks > MAX_LEGACY_CHUNKS) {
     return NextResponse.json({ error: 'Invalid totalChunks' }, { status: 400 })
   }
   if (typeof fileName !== 'string' || !fileName.toLowerCase().endsWith('.zip')) {

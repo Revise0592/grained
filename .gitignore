@@ -12,3 +12,6 @@ dist/
 .DS_Store
 .claude/
 Thumbs.db
+
+# taste-skill deal history
+.taste-skill/
